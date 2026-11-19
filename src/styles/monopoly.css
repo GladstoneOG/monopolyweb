@@ -1,0 +1,1853 @@
+/* src/styles/monopoly.css */
+
+/* ==================== 3D Tabletop Viewport ==================== */
+.monopoly-table-container {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--tabletop-bg);
+  box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.78);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  touch-action: none;
+  user-select: none;
+}
+
+.monopoly-ambient-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.bg-glow-ring,
+.bg-glow-ring-alt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.bg-glow-ring {
+  width: 860px;
+  height: 860px;
+  border: 2px dashed rgba(251, 191, 36, 0.12);
+  animation: slowSpin 65s linear infinite;
+}
+
+.bg-glow-ring-alt {
+  width: 1060px;
+  height: 1060px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  animation: slowSpinReverse 90s linear infinite;
+}
+
+@keyframes slowSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes slowSpinReverse {
+  from { transform: translate(-50%, -50%) rotate(360deg); }
+  to { transform: translate(-50%, -50%) rotate(0deg); }
+}
+
+/* ==================== Isometric 3D Camera Rig ==================== */
+.monopoly-board-wrapper {
+  perspective: 1500px;
+  width: 1100px;
+  height: 1100px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+  transform: translateY(-24px);
+  overflow: visible;
+}
+
+.monopoly-board-tilt {
+  width: 638px;
+  height: 620px;
+  transform-style: preserve-3d;
+  transform:
+    rotateX(42deg)
+    rotateZ(45deg)
+    translate3d(var(--board-x, 0px), var(--board-y, 0px), 0px)
+    scale(var(--board-scale, 0.95));
+  transition: transform var(--camera-transition, 0.8s) cubic-bezier(0.25, 1, 0.35, 1);
+  will-change: transform;
+  position: relative;
+}
+
+.monopoly-board-tilt.camera-shake {
+  animation: cameraShake 0.4s ease-in-out;
+}
+
+@keyframes cameraShake {
+  0%, 100% { filter: none; }
+  25% { transform: rotateX(42deg) rotateZ(45deg) translate3d(calc(var(--board-x, 0px) + 6px), var(--board-y, 0px), 0px) scale(var(--board-scale, 0.95)); }
+  75% { transform: rotateX(42deg) rotateZ(45deg) translate3d(calc(var(--board-x, 0px) - 6px), var(--board-y, 0px), 0px) scale(var(--board-scale, 0.95)); }
+}
+
+/* ==================== 11x11 Board Grid ==================== */
+.monopoly-board-grid {
+  width: 638px;
+  height: 620px;
+  display: grid;
+  grid-template-columns: 85px repeat(9, 52px) 85px;
+  grid-template-rows: 85px repeat(9, 50px) 85px;
+  background: #e8f5e9;
+  border: 6px solid #0f172a;
+  border-radius: 10px;
+  box-shadow:
+    0 24px 55px rgba(0, 0, 0, 0.65),
+    0 8px 0 #1e293b;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.monopoly-tile {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  overflow: visible;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.monopoly-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--tile-owner-tint, transparent);
+  pointer-events: none;
+}
+
+.monopoly-tile.highlighted {
+  box-shadow: inset 0 0 12px rgba(251, 191, 36, 0.65);
+}
+
+.monopoly-tile.monopoly-glow {
+  box-shadow: inset 0 0 10px var(--monopoly-glow-color), 0 0 8px var(--monopoly-glow-color);
+}
+
+/* Color bars oriented toward inner edge of board */
+.color-bar {
+  position: relative;
+  width: 100%;
+  height: 15px;
+  border-bottom: 1.5px solid #0f172a;
+  flex-shrink: 0;
+}
+
+.top-row.property-tile { flex-direction: column-reverse; }
+.top-row .color-bar { border-bottom: none; border-top: 1.5px solid #0f172a; }
+
+.left-col.property-tile { flex-direction: row-reverse; }
+.left-col .color-bar { width: 15px; height: 100%; border-bottom: none; border-left: 1.5px solid #0f172a; }
+
+.right-col.property-tile { flex-direction: row; }
+.right-col .color-bar { width: 15px; height: 100%; border-bottom: none; border-right: 1.5px solid #0f172a; }
+
+.tile-group-brown { background: #8b4513; }
+.tile-group-lightblue { background: #38bdf8; }
+.tile-group-pink { background: #ec4899; }
+.tile-group-orange { background: #f97316; }
+.tile-group-red { background: #ef4444; }
+.tile-group-yellow { background: #facc15; }
+.tile-group-green { background: #16a34a; }
+.tile-group-darkblue { background: #1d4ed8; }
+
+.monopoly-crown-tag {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(4px);
+  background: #fbbf24;
+  color: #0f172a;
+  font-size: 0.42rem;
+  font-weight: 900;
+  padding: 1px 3px;
+  border-radius: 3px;
+  border: 1px solid #0f172a;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+.festival-boost-badge {
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(6px);
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  color: #ffffff;
+  font-size: 0.46rem;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 4px;
+  border: 1px solid #78350f;
+  white-space: nowrap;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.tile-info-container {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  text-align: center;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.tile-name {
+  font-size: 0.48rem;
+  font-weight: 800;
+  line-height: 1.08;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.tile-price {
+  font-size: 0.46rem;
+  font-weight: 900;
+  color: #047857;
+  margin-top: 2px;
+}
+
+.special-tile-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 100%;
+  height: 100%;
+}
+
+.tile-svg-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.corner-tile .tile-svg-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.special-title {
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.3px;
+  line-height: 1.05;
+}
+
+.special-title.dark { color: #0f172a; }
+.special-title.sky { color: #0369a1; }
+.special-title.amber { color: #b45309; }
+.special-title.danger { color: #dc2626; }
+.special-title.blue { color: #2563eb; }
+.special-title.gold { color: #fbbf24; }
+
+.special-sub {
+  font-size: 0.39rem;
+  font-weight: 800;
+  color: #475569;
+}
+
+.special-sub.gold-sub { color: #fde68a; }
+.special-sub.danger { color: #ef4444; }
+
+.special-city {
+  font-size: 0.44rem;
+  font-weight: 800;
+  line-height: 1.05;
+  color: #0f172a;
+}
+
+.special-city.danger { color: #dc2626; }
+
+.tile-mortgaged-badge {
+  position: absolute;
+  inset: auto 2px 3px 2px;
+  background: rgba(239, 68, 68, 0.92);
+  color: #ffffff;
+  font-size: 0.4rem;
+  font-weight: 900;
+  text-align: center;
+  padding: 1px 2px;
+  border-radius: 3px;
+  z-index: 15;
+  transform: translateZ(3px);
+}
+
+.tile-selection-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 0.58rem;
+  font-weight: 900;
+  border: 1.5px solid #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 98;
+  transform: translateZ(6px);
+}
+
+.tile-player-pointer {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #3b82f6;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
+  z-index: 105;
+  pointer-events: none;
+}
+
+/* ==================== 3D Houses & Hotels ==================== */
+.tile-buildings-container {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%) translateZ(2px);
+  display: flex;
+  gap: 3px;
+  transform-style: preserve-3d;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.tile-buildings-container.grid-layout {
+  display: grid;
+  grid-template-columns: repeat(2, 10px);
+  gap: 2px;
+}
+
+.cube-3d {
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.cube-3d.house {
+  width: 9px;
+  height: 9px;
+  --sz: 9px;
+  --h: 10px;
+}
+
+.cube-3d.hotel {
+  width: 14px;
+  height: 14px;
+  --sz: 14px;
+  --h: 18px;
+}
+
+.cube-face {
+  position: absolute;
+  inset: 0;
+  border: 0.7px solid rgba(15, 23, 42, 0.45);
+  background: var(--building-color, #10b981);
+}
+
+.cube-3d.hotel .cube-face {
+  background: linear-gradient(135deg, #fde047 0%, #d97706 100%);
+  border-color: #78350f;
+}
+
+.cube-face.face-bottom {
+  background: rgba(0, 0, 0, 0.35);
+  transform: translateZ(0px);
+}
+
+.cube-face.face-top {
+  filter: brightness(1.18);
+  transform: translateZ(var(--h));
+}
+
+.cube-face.face-front {
+  height: var(--h);
+  transform-origin: bottom;
+  bottom: 0;
+  top: auto;
+  transform: rotateX(-90deg);
+  filter: brightness(0.92);
+}
+
+.cube-face.face-back {
+  height: var(--h);
+  transform-origin: top;
+  top: 0;
+  transform: rotateX(90deg);
+  filter: brightness(0.8);
+}
+
+.cube-face.face-left {
+  width: var(--h);
+  transform-origin: left;
+  left: 0;
+  transform: rotateY(-90deg);
+  filter: brightness(0.84);
+}
+
+.cube-face.face-right {
+  width: var(--h);
+  transform-origin: right;
+  right: 0;
+  left: auto;
+  transform: rotateY(90deg);
+  filter: brightness(1.04);
+}
+
+/* ==================== Center Board Decor & Decks ==================== */
+.monopoly-board-center {
+  grid-column: 2 / 11;
+  grid-row: 2 / 11;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(145deg, #ecfdf5 0%, #d1fae5 100%);
+  transform-style: preserve-3d;
+}
+
+.board-center-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.28);
+  z-index: 80;
+  pointer-events: none;
+}
+
+.board-center-scrolling-city {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.scrolling-city-diagonal-wrapper {
+  position: absolute;
+  inset: -40%;
+  transform: rotate(-45deg);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.background-sun-container {
+  position: absolute;
+  top: 20%;
+  left: 42%;
+  width: 90px;
+  height: 90px;
+}
+
+.spinning-sun-svg {
+  width: 100%;
+  height: 100%;
+  animation: spinLinear 24s linear infinite;
+}
+
+@keyframes spinLinear {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.scrolling-city-ribbon {
+  display: flex;
+  width: 200%;
+  height: 110px;
+  animation: skylineScroll 26s linear infinite;
+}
+
+.city-svg-ribbon {
+  width: 50%;
+  height: 100%;
+}
+
+@keyframes skylineScroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.monopoly-logo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotateZ(-45deg) translateZ(2px);
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  padding: 8px 26px;
+  border: 4px solid #ffffff;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  z-index: 20;
+}
+
+.board-turn-pill {
+  position: absolute;
+  top: 34%;
+  left: 38%;
+  transform: translate(-50%, -50%) rotateZ(-45deg) translateZ(3px);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: 999px;
+  z-index: 25;
+}
+
+.board-turn-pill.limited {
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+.monopoly-deck-slot {
+  position: absolute;
+  width: 96px;
+  height: 60px;
+  transform-style: preserve-3d;
+}
+
+.monopoly-deck-slot.chance {
+  top: 56px;
+  right: 46px;
+}
+
+.monopoly-deck-slot.chest {
+  bottom: 56px;
+  left: 46px;
+}
+
+.physical-deck-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.chance-card-back {
+  background: linear-gradient(135deg, #f97316, #dc2626);
+}
+
+.chest-card-back {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+}
+
+.card-back-design {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.56rem;
+}
+
+.flying-3d-card {
+  position: absolute;
+  width: 96px;
+  height: 60px;
+  border-radius: 8px;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: left 0.85s ease, top 0.85s ease, transform 0.85s ease;
+  z-index: 200;
+  pointer-events: none;
+}
+
+.flying-3d-card.chance-card { background: linear-gradient(135deg, #f97316, #dc2626); }
+.flying-3d-card.chest-card { background: linear-gradient(135deg, #3b82f6, #1d4ed8); }
+
+/* ==================== Upright Player Tokens ==================== */
+.monopoly-player-token {
+  position: absolute;
+  transform: translate(-50%, -50%) translateZ(16px);
+  transition: left 0.2s linear, top 0.2s linear;
+  z-index: 120;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.token-inner {
+  position: relative;
+  transform: rotateZ(-45deg) rotateX(-42deg);
+  transform-style: preserve-3d;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.monopoly-player-token.hopping .token-inner {
+  animation: tokenHop 0.22s ease-in-out infinite;
+}
+
+@keyframes tokenHop {
+  0%, 100% { transform: rotateZ(-45deg) rotateX(-42deg) translateY(0); }
+  50% { transform: rotateZ(-45deg) rotateX(-42deg) translateY(-16px); }
+}
+
+.token-pedestal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  border-radius: 50%;
+  border: 1.5px solid #ffffff;
+  transform: rotateX(90deg) translateZ(-12px);
+}
+
+.token-avatar-wrapper {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 3px solid #3b82f6;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.board-turn-arrow {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--player-color, #fbbf24);
+  font-size: 1.05rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
+  animation: arrowBob 0.8s ease-in-out infinite;
+}
+
+.board-turn-arrow.higher {
+  top: -46px;
+}
+
+@keyframes arrowBob {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(-6px); }
+}
+
+.token-countdown-badge {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #0f172a;
+  color: #fbbf24;
+  border: 1.5px solid #fbbf24;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 1px 7px;
+}
+
+.player-status-badge {
+  position: absolute;
+  top: -44px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.92);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ==================== 3D Table Money Stacks & Flying Bills ==================== */
+.table-money-stack-container {
+  position: absolute;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.table-money-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  transform-style: preserve-3d;
+}
+
+.table-money-stack {
+  position: relative;
+  width: 52px;
+  height: 26px;
+  transform-style: preserve-3d;
+}
+
+.table-bill {
+  position: absolute;
+  width: 52px;
+  height: 26px;
+  border-radius: 3px;
+  border: 1px solid rgba(15, 23, 42, 0.45);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-bill.val-500 { background: #fde68a; }
+.table-bill.val-100 { background: #fed7aa; }
+.table-bill.val-50 { background: #bfdbfe; }
+.table-bill.val-10 { background: #bbf7d0; }
+
+.table-bill-inner {
+  width: 90%;
+  height: 82%;
+  border: 1px dashed rgba(15, 23, 42, 0.35);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-bill-center-val {
+  font-size: 0.52rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.table-bill-corner {
+  position: absolute;
+  font-size: 0.36rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.table-bill-corner.tl { top: 1px; left: 2px; }
+.table-bill-corner.br { bottom: 1px; right: 2px; }
+
+.table-3d-jailcard-stack {
+  display: flex;
+  gap: 6px;
+  transform-style: preserve-3d;
+}
+
+.table-3d-card {
+  width: 34px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.4rem;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.05;
+  color: #ffffff;
+}
+
+.table-3d-card.jail-free-card { background: #f59e0b; color: #0f172a; }
+.table-3d-card.odd-even-card { background: #7c3aed; }
+.table-3d-card.angel-card { background: #10b981; }
+
+.table-stack-label {
+  position: absolute;
+  bottom: -22px;
+  left: 50%;
+  transform-origin: center;
+  background: rgba(15, 23, 42, 0.85);
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.flying-bill {
+  left: 0;
+  top: 0;
+  z-index: 250;
+  animation: flyBill 1.15s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes flyBill {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--start-x), var(--start-y), var(--start-z)) rotateZ(var(--rot-z-start)) scale(0.8);
+  }
+  15% { opacity: 1; }
+  50% {
+    transform: translate3d(
+      calc((var(--start-x) + var(--end-x)) / 2),
+      calc((var(--start-y) + var(--end-y)) / 2),
+      150px
+    ) rotateZ(180deg) scale(1.1);
+  }
+  85% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--end-x), var(--end-y), var(--end-z)) rotateZ(var(--rot-z-end)) scale(0.9);
+  }
+}
+
+/* ==================== Floating Tile Action Text & Jail Bars ==================== */
+.tile-action-popup-wrapper {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(34px) rotateZ(-45deg) rotateX(-42deg);
+  z-index: 200;
+  pointer-events: none;
+}
+
+.tile-action-popup {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #ffffff;
+  background: #0f172a;
+  border: 1.5px solid #ffffff;
+  white-space: nowrap;
+  animation: floatUpFade 2.1s ease-out forwards;
+}
+
+.tile-action-popup.bought,
+.tile-action-popup.built,
+.tile-action-popup.salary { background: #10b981; }
+.tile-action-popup.rent,
+.tile-action-popup.mortgaged { background: #ef4444; }
+.tile-action-popup.festival,
+.tile-action-popup.monopoly { background: #f59e0b; color: #0f172a; }
+.tile-action-popup.airport { background: #0284c7; }
+.tile-action-popup.acquired,
+.tile-action-popup.traded { background: #8b5cf6; }
+
+@keyframes floatUpFade {
+  0% { opacity: 0; transform: translateY(10px) scale(0.75); }
+  18% { opacity: 1; transform: translateY(-6px) scale(1.08); }
+  100% { opacity: 0; transform: translateY(-38px) scale(0.95); }
+}
+
+.jail-bars-animation-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  transform: translateZ(18px);
+}
+
+.jail-bar-gate {
+  width: 66px;
+  height: 54px;
+  display: flex;
+  justify-content: space-around;
+  position: relative;
+  border: 3px solid #1e293b;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.jail-bar {
+  width: 4px;
+  height: 100%;
+  background: #94a3b8;
+}
+
+.jailed-text-popup {
+  margin-top: 4px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* ==================== Top Header, Victory Watch & Corner HUD ==================== */
+.monopoly-top-middle-header {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(8px);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.header-mode-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fbbf24;
+  padding: 0 8px;
+}
+
+.top-header-btn,
+.top-header-btn-leave {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.top-header-btn {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.top-header-btn-leave {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.victory-tracker-bar {
+  position: fixed;
+  top: 58px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 550;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  border-radius: 999px;
+  padding: 5px 12px;
+  color: #ffffff;
+  font-size: 0.72rem;
+}
+
+.victory-tracker-title {
+  color: #fbbf24;
+  font-weight: 900;
+}
+
+.victory-tracker-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.victory-tracker-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid #3b82f6;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
+.vt-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.monopoly-corner-cards {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 500;
+}
+
+.corner-card {
+  position: fixed;
+  width: 224px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.corner-card.top-left { top: 14px; left: 14px; }
+.corner-card.top-right { top: 14px; right: 14px; }
+.corner-card.bottom-left { bottom: 14px; left: 14px; }
+.corner-card.bottom-right { bottom: 14px; right: 14px; }
+
+.corner-card.active-turn {
+  box-shadow: 0 0 0 3px #fbbf24, 0 12px 32px rgba(251, 191, 36, 0.45);
+}
+
+.corner-card.bankrupt-player {
+  opacity: 0.48;
+  filter: grayscale(0.8);
+}
+
+.corner-rank-badge {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  font-size: 0.64rem;
+  font-weight: 900;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.corner-rank-badge.rank-1 {
+  background: #fbbf24;
+  color: #0f172a;
+}
+
+.corner-avatar-wrapper {
+  border: 3px solid #3b82f6;
+  border-radius: 50%;
+  background: #ffffff;
+  padding: 2px;
+  flex-shrink: 0;
+}
+
+.corner-card-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.corner-card-name {
+  font-size: 0.8rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.corner-card-money {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #047857;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.corner-change-number {
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.corner-change-number.positive { color: #10b981; }
+.corner-change-number.negative { color: #ef4444; }
+
+.corner-card-worth {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.corner-card-badges {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+
+.jail-badge,
+.card-badge,
+.corner-status-pill {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 5px;
+  color: #ffffff;
+}
+
+.jail-badge { background: #ef4444; }
+.card-badge.jail { background: #f59e0b; color: #0f172a; }
+.card-badge.oddeven { background: #7c3aed; }
+.card-badge.angel { background: #10b981; }
+.corner-status-pill.managing { background: #0284c7; }
+.corner-status-pill.trading { background: #8b5cf6; }
+.corner-status-pill.offline { background: #64748b; }
+
+/* ==================== Bottom Unified Action HUD & Power Bar ==================== */
+.monopoly-unified-hud-bottom {
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  padding: 10px 14px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+}
+
+.btn-roll-red {
+  border: none;
+  border-radius: 12px;
+  padding: 11px 22px;
+  font-weight: 900;
+  font-size: 0.94rem;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.roll-glow-animation {
+  animation: pulseGlow 1.6s ease-in-out infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 24px rgba(251, 191, 36, 0.8); }
+}
+
+.hud-jail-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-disabled-hud {
+  border: none;
+  border-radius: 12px;
+  padding: 11px 20px;
+  font-weight: 800;
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.unified-hud-manage-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.unified-hud-dev-btn {
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  cursor: pointer;
+}
+
+.power-roll-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.odd-even-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.odd-even-caption {
+  font-size: 0.58rem;
+  font-weight: 900;
+  color: #cbd5e1;
+}
+
+.odd-even-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-odd-even {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1.5px solid #475569;
+  background: #1e293b;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.btn-odd-even.active {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  border-color: #c4b5fd;
+}
+
+.power-bar-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.power-bar-track {
+  position: relative;
+  width: 138px;
+  height: 9px;
+  background: #1e293b;
+  border-radius: 999px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  overflow: hidden;
+}
+
+.power-bar-ticks span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: rgba(255, 255, 255, 0.35);
+  z-index: 2;
+}
+
+.power-bar-fill {
+  height: 100%;
+  background: #10b981;
+  will-change: width;
+}
+
+.power-bar-label {
+  font-size: 0.64rem;
+  font-weight: 800;
+  color: #cbd5e1;
+}
+
+.reset-camera-btn {
+  position: fixed;
+  bottom: 92px;
+  right: 18px;
+  z-index: 600;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.88);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.78rem;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+/* ==================== Intro Curtain ==================== */
+.monopoly-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1600;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.monopoly-intro-curtain-left,
+.monopoly-intro-curtain-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: radial-gradient(circle at center, #7f1d1d 0%, #450a0a 100%);
+  transition: transform 0.75s cubic-bezier(0.7, 0, 0.2, 1);
+}
+
+.monopoly-intro-curtain-left { left: 0; }
+.monopoly-intro-curtain-right { right: 0; }
+.monopoly-intro-curtain-left.open { transform: translateX(-100%); }
+.monopoly-intro-curtain-right.open { transform: translateX(100%); }
+
+.monopoly-intro-countdown-text {
+  position: relative;
+  z-index: 10;
+  font-size: 5rem;
+  font-weight: 900;
+  color: #fbbf24;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.7);
+}
+
+.monopoly-intro-countdown-text.roll-text {
+  color: #10b981;
+  font-size: 4.2rem;
+}
+
+/* ==================== Dice Roll Modal ==================== */
+.dice-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.dice-modal-content {
+  background: rgba(15, 23, 42, 0.94);
+  color: #ffffff;
+  border: 2px solid rgba(251, 191, 36, 0.45);
+  border-radius: 22px;
+  padding: 22px 34px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+}
+
+.dice-modal-subtitle {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.dice-modal-title {
+  margin: 4px 0 16px;
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+}
+
+.dice-modal-container {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+}
+
+.die-2d {
+  width: 68px;
+  height: 68px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #ffffff 0%, #e2e8f0 100%);
+  border: 3px solid var(--die-tint, #0f172a);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4), inset 0 -4px 8px rgba(0, 0, 0, 0.12);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  padding: 8px;
+  place-items: center;
+}
+
+.die-2d.rolling-2d {
+  animation: dieTumble 0.24s linear infinite;
+}
+
+@keyframes dieTumble {
+  0% { transform: rotate(-10deg) scale(0.95); }
+  50% { transform: rotate(10deg) scale(1.06); }
+  100% { transform: rotate(-10deg) scale(0.95); }
+}
+
+.dot-2d {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #0f172a;
+}
+
+.dice-modal-result-container {
+  margin-top: 14px;
+}
+
+.dice-modal-total {
+  font-size: 1.65rem;
+  font-weight: 900;
+  color: #fbbf24;
+}
+
+.dice-modal-doubles {
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #f97316;
+}
+
+/* ==================== Casino 3D Gold Coin Modal ==================== */
+.casino-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1250;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.casino-card {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(160deg, #1e1b4b 0%, #0f172a 100%);
+  color: #ffffff;
+  border: 3px solid #fbbf24;
+  border-radius: 22px;
+  padding: 26px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+}
+
+.casino-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fbbf24;
+  letter-spacing: 1px;
+}
+
+.casino-subtitle {
+  font-size: 0.86rem;
+  color: #cbd5e1;
+  margin-top: 4px;
+}
+
+.casino-round-badge {
+  margin: 14px auto;
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.16);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fde68a;
+  font-size: 0.9rem;
+}
+
+.coin-container {
+  perspective: 900px;
+  width: 124px;
+  height: 124px;
+  margin: 16px auto 22px;
+}
+
+.coin-3d {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+}
+
+.coin-3d.flipping {
+  animation: coinFlipSpin 1.95s cubic-bezier(0.2, 0.85, 0.3, 1) forwards;
+}
+
+.coin-3d.won-state { transform: rotateY(0deg); }
+.coin-3d.lost-state { transform: rotateY(180deg); }
+
+@keyframes coinFlipSpin {
+  0% { transform: rotateY(0deg) translateY(0); }
+  50% { transform: rotateY(900deg) translateY(-34px) scale(1.12); }
+  100% { transform: rotateY(var(--coin-final-rotation, 1800deg)) translateY(0); }
+}
+
+.coin-side {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  backface-visibility: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 6px solid #f59e0b;
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.25), 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.coin-front {
+  background: radial-gradient(circle at 30% 30%, #fef08a 0%, #fbbf24 55%, #b45309 100%);
+}
+
+.coin-back {
+  background: radial-gradient(circle at 30% 30%, #475569 0%, #1e293b 65%, #0f172a 100%);
+  transform: rotateY(180deg);
+  border-color: #ef4444;
+}
+
+.coin-crown { font-size: 2.3rem; }
+.coin-label { font-size: 0.9rem; font-weight: 900; letter-spacing: 1px; }
+.coin-label.win { color: #1e1b4b; }
+.coin-label.lose { color: #f87171; }
+
+.casino-actions-box {
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+}
+
+.casino-main-btn { width: 100%; padding: 12px; font-size: 1rem; }
+.casino-btn-row { display: flex; gap: 8px; width: 100%; }
+.casino-btn-row button { flex: 1; font-size: 0.82rem; }
+.casino-waiting { font-size: 0.84rem; color: #94a3b8; font-style: italic; }
+.casino-flipping-text { font-weight: 800; color: #fde68a; }
+.win-text-effect { font-weight: 900; font-size: 1.05rem; color: #34d399; }
+.win-text-effect.jackpot { font-size: 1.25rem; color: #fbbf24; }
+.lose-shake-effect { font-weight: 900; font-size: 1.15rem; color: #f87171; }
+
+/* ==================== Phase Popups & Decision Modals ==================== */
+.drawn-card-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1050;
+  width: 330px;
+  max-width: 92vw;
+  background: #ffffff;
+  color: #0f172a;
+  border: 3px solid #10b981;
+  border-radius: 18px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 24px 55px rgba(0, 0, 0, 0.5);
+}
+
+.drawn-card-popup.chance { border-color: #f97316; }
+.drawn-card-popup.chest { border-color: #3b82f6; }
+.drawn-card-popup.danger { border-color: #ef4444; }
+.drawn-card-popup.amber { border-color: #f59e0b; }
+.drawn-card-popup.sky { border-color: #0284c7; }
+.drawn-card-popup.purple { border-color: #8b5cf6; }
+
+.popup-color-banner {
+  height: 16px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border: 1.5px solid #0f172a;
+}
+
+.card-header-icon { font-size: 2.1rem; margin-bottom: 4px; }
+.card-title-text { font-size: 1.2rem; font-weight: 900; margin-bottom: 8px; }
+.card-body-text { font-size: 0.9rem; color: #334155; line-height: 1.4; margin-bottom: 14px; }
+.popup-price-big { font-size: 1.75rem; font-weight: 900; color: #059669; margin: 6px 0; }
+.popup-price-big.danger { color: #dc2626; }
+.popup-sub-note { font-size: 0.82rem; color: #475569; margin-bottom: 12px; }
+.popup-waiting { font-size: 0.82rem; color: #64748b; font-weight: 600; }
+.popup-btn-row { display: flex; gap: 10px; }
+.popup-btn-row button { flex: 1; }
+.popup-btn-col { display: flex; flex-direction: column; gap: 8px; }
+.popup-full-btn { width: 100%; margin-top: 8px; }
+
+.floating-selector-banner {
+  position: fixed;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1020;
+  width: 90%;
+  max-width: 470px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #ffffff;
+  border: 2.5px solid #3b82f6;
+  border-radius: 16px;
+  padding: 14px 20px;
+  text-align: center;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.floating-selector-banner.amber { border-color: #f59e0b; }
+.floating-selector-banner.sky { border-color: #0284c7; }
+.floating-selector-banner.gold { border-color: #fbbf24; }
+.fsb-title { font-weight: 900; font-size: 1rem; color: #fbbf24; }
+.fsb-desc { font-size: 0.82rem; color: #e2e8f0; }
+
+.landed-build-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.landed-build-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.landed-build-option.hotel {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+}
+
+.landed-build-option:disabled {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+/* GO Bonus & Game Over */
+.go-bonus-card,
+.gameover-podium-card {
+  width: 100%;
+  max-width: 440px;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 20px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.go-bonus-list {
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.go-bonus-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.go-bonus-row span {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.gameover-reason {
+  background: #ecfdf5;
+  color: #047857;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.gameover-rankings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.podium-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  text-align: left;
+}
+
+.podium-row.winner {
+  background: #fef9c3;
+  border-color: #eab308;
+}
+
+.podium-rank { font-size: 1.25rem; font-weight: 900; width: 32px; text-align: center; }
+.podium-info { flex: 1; }
+.podium-info span { display: block; font-size: 0.76rem; color: #475569; }
+.bankrupt-pill { font-size: 0.68rem; font-weight: 800; background: #fee2e2; color: #b91c1c; padding: 2px 6px; border-radius: 5px; }
+.gameover-actions { display: flex; flex-direction: column; gap: 8px; }
+
+/* ==================== Deed, Build Manager, Auction, Trade, Detail Modals ==================== */
+.deed-card-modal,
+.build-manager-modal,
+.auction-modal-card,
+.trade-editor-modal,
+.incoming-trade-card,
+.player-detail-modal,
+.awaiting-trade-card {
+  width: 100%;
+  background: #ffffff;
+  color: #0f172a;
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  max-height: 88vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.deed-card-modal { max-width: 560px; }
+.build-manager-modal { max-width: 560px; }
+.auction-modal-card { max-width: 520px; }
+.trade-editor-modal { max-width: 680px; }
+.incoming-trade-card { max-width: 520px; }
+.player-detail-modal { max-width: 480px; border: 3px solid #3b82f6; }
+.awaiting-trade-card { max-width: 360px; text-align: center; }
+
+.deed-card-layout { display: flex; gap: 18px; }
+.deed-left-col { flex: 1; border: 2px solid #0f172a; border-radius: 8px; padding: 12px; }
+.deed-right-col { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+.deed-header-color { height: 20px; border: 1.5px solid #0f172a; border-radius: 3px; margin-bottom: 6px; }
+.deed-header.special { background: #e2e8f0; border-radius: 6px; padding: 10px; text-align: center; }
+.deed-special-emoji { font-size: 1.6rem; }
+.deed-title { font-weight: 900; font-size: 1.05rem; }
+.deed-rents { margin-top: 10px; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px; }
+.deed-rents > div { display: flex; justify-content: space-between; padding: 2px 4px; border-radius: 4px; }
+.deed-rents > div.active-row { background: #dcfce7; color: #047857; font-weight: 800; }
+.deed-divider { border-top: 1px dashed #cbd5e1; margin: 4px 0; }
+.deed-note { margin: 4px 0; color: #475569; font-size: 0.78rem; }
+.deed-status-heading { margin: 0 0 10px; font-size: 0.9rem; text-transform: uppercase; }
+.deed-status-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.deed-status-label { font-size: 0.68rem; color: #64748b; text-transform: uppercase; font-weight: 800; }
+.deed-rent-banner { display: flex; justify-content: space-between; align-items: center; background: #ecfdf5; border: 1px dashed #10b981; border-radius: 10px; padding: 10px; color: #047857; margin-bottom: 10px; }
+.deed-rent-banner.mortgaged { background: #fef2f2; border-color: #ef4444; color: #dc2626; }
+.deed-festival-note { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 8px; font-size: 0.76rem; color: #b45309; font-weight: 700; }
+.deed-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.mortgaged-pill { display: inline-block; width: fit-content; background: #fee2e2; color: #b91c1c; font-size: 0.65rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; }
+
+/* Build Manager */
+.monopoly-build-sections-container { max-height: 55vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.build-empty-state { text-align: center; padding: 24px; color: #64748b; }
+.build-group-section { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; }
+.build-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 800; text-transform: capitalize; font-size: 0.85rem; }
+.build-group-color-dot, .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.build-group-badge { background: #fef08a; color: #854d0e; font-size: 0.68rem; padding: 2px 6px; border-radius: 999px; }
+.build-properties-list { display: flex; flex-direction: column; gap: 6px; }
+.build-property-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; flex-wrap: wrap; }
+.build-property-row.current-tile-highlight { border-color: #3b82f6; background: #eff6ff; }
+.build-prop-name { display: block; font-weight: 800; font-size: 0.85rem; }
+.build-prop-status { font-size: 0.72rem; color: #64748b; }
+.build-prop-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.build-action-btn { border: none; border-radius: 7px; padding: 6px 10px; font-size: 0.72rem; font-weight: 800; cursor: pointer; color: #ffffff; }
+.build-action-btn.build-add { background: #10b981; }
+.build-action-btn.build-sell { background: #f59e0b; color: #0f172a; }
+.build-action-btn.build-mortgage { background: #ef4444; }
+.build-action-btn.build-unmortgage { background: #3b82f6; }
+.build-manager-done-btn { width: 100%; }
+
+/* Auction */
+.auction-header { text-align: center; margin-bottom: 12px; }
+.auction-header h2 { margin: 0; font-size: 1.3rem; color: #d97706; }
+.auction-header p { margin: 4px 0 0; font-size: 0.8rem; color: #64748b; }
+.auction-summary { display: flex; gap: 14px; align-items: center; background: #f8fafc; border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.auction-tile-badge { width: 150px; background: #ffffff; border: 2px solid #0f172a; border-radius: 8px; padding: 8px; text-align: center; display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+.auction-color-bar { height: 12px; border-radius: 3px; }
+.auction-bid-readout { flex: 1; text-align: center; }
+.auction-bid-label { font-size: 0.7rem; font-weight: 800; color: #64748b; }
+.auction-bid-value { font-size: 2.1rem; font-weight: 900; color: #10b981; }
+.auction-rent-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; font-size: 0.72rem; text-align: center; }
+.auction-rent-grid > div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px; display: flex; flex-direction: column; }
+.auction-rent-grid .hotel-cell { grid-column: span 3; background: #fffbeb; border-color: #fde68a; }
+.auction-bidders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(115px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.auction-bidder-card { background: #f1f5f9; border: 1.5px solid transparent; border-radius: 8px; padding: 8px; font-size: 0.74rem; }
+.auction-bidder-card.active { background: #dcfce7; border-color: #10b981; }
+.auction-bidder-card.folded { opacity: 0.45; }
+.auction-bidder-top { display: flex; align-items: center; gap: 6px; font-weight: 800; }
+.auction-bidder-cash { margin-top: 4px; color: #047857; font-weight: 700; }
+.folded-tag { color: #dc2626; font-weight: 800; font-size: 0.68rem; }
+.auction-controls { display: flex; flex-direction: column; gap: 8px; }
+.auction-your-turn { text-align: center; color: #059669; font-weight: 800; font-size: 0.85rem; }
+.auction-bid-buttons { display: flex; gap: 8px; }
+.auction-bid-buttons button { flex: 1; }
+.auction-waiting { text-align: center; padding: 12px; background: #f8fafc; border-radius: 10px; font-size: 0.85rem; color: #475569; }
+
+/* Trade */
+.trade-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
+.trade-col { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.trade-col-header { display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 0.82rem; }
+.trade-col-header.offer { color: #059669; }
+.trade-col-header.demand { color: #2563eb; }
+.trade-field-label { display: flex; flex-direction: column; gap: 4px; font-size: 0.72rem; font-weight: 800; color: #64748b; }
+.trade-field-label input { padding: 6px 8px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 700; }
+.trade-props-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.72rem; font-weight: 800; color: #64748b; }
+.trade-props-list { max-height: 165px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.trade-prop-item { display: flex; align-items: flex-start; gap: 8px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px; cursor: pointer; font-size: 0.78rem; }
+.trade-prop-item.disabled { opacity: 0.5; cursor: not-allowed; }
+.trade-prop-title { display: flex; align-items: center; gap: 5px; }
+.trade-prop-sub { font-size: 0.68rem; color: #64748b; }
+.trade-balance-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+.trade-balance-totals { display: flex; justify-content: space-between; font-size: 0.78rem; color: #475569; }
+.trade-balance-bottom { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; font-weight: 800; }
+.trade-balance-bottom .balanced { color: #059669; }
+.trade-balance-bottom .overpay { color: #d97706; }
+.trade-balance-bottom .underpay { color: #dc2626; }
+.trade-footer-actions { display: flex; gap: 10px; }
+.trade-footer-actions button { flex: 1; }
+.trade-incoming-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: #f8fafc; border-radius: 12px; padding: 12px; margin: 12px 0 16px; }
+.trade-side-box h4 { margin: 0 0 8px; font-size: 0.78rem; }
+.trade-side-box h4.offer { color: #059669; }
+.trade-side-box h4.demand { color: #dc2626; }
+.trade-summary-prop { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; margin-top: 4px; }
+.incoming-trade-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+/* Player Detail */
+.player-detail-close { position: absolute; top: 12px; right: 12px; border: none; background: rgba(15, 23, 42, 0.1); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-weight: 900; }
+.player-detail-header { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; margin-bottom: 12px; }
+.player-detail-header h3 { margin: 0; font-size: 1.15rem; }
+.player-detail-role { font-size: 0.72rem; font-weight: 800; color: #475569; }
+.player-detail-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; text-align: center; }
+.stat-box span { display: block; font-size: 0.68rem; font-weight: 800; color: #64748b; }
+.stat-box strong { font-size: 1.15rem; }
+.stat-box strong.cash { color: #059669; }
+.stat-box strong.worth { color: #2563eb; }
+.detail-section { margin-bottom: 12px; }
+.detail-section h4 { margin: 0 0 6px; font-size: 0.78rem; color: #475569; }
+.detail-cards-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.detail-props-scroll { max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.detail-prop-row { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; font-size: 0.8rem; }
+.detail-prop-left { display: flex; align-items: center; gap: 6px; }
+.detail-trade-btn { width: 100%; margin-top: 6px; }
+.muted-note { font-size: 0.78rem; color: #94a3b8; }
+.house-chip, .mono-chip { font-size: 0.7rem; }
+
+@media (max-width: 720px) {
+  .corner-card { width: 156px; padding: 7px 8px; }
+  .corner-card-money { font-size: 0.88rem; }
+  .deed-card-layout,
+  .trade-columns { flex-direction: column; grid-template-columns: 1fr; }
+}
