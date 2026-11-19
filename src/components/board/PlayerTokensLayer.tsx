@@ -50,6 +50,7 @@ export const PlayerTokensLayer: React.FC<PlayerTokensLayerProps> = React.memo(
                 top: `calc(50% + ${coords.y + dy}px)`,
               }}
             >
+              <div className="token-ground-shadow" />
               <div className="token-inner">
                 {p.id === activePlayerId && (
                   <div
@@ -72,7 +73,7 @@ export const PlayerTokensLayer: React.FC<PlayerTokensLayerProps> = React.memo(
                   className="token-avatar-wrapper"
                   style={{
                     borderColor: color,
-                    boxShadow: `0 6px 14px rgba(0,0,0,0.52), 0 0 10px ${color}99`,
+                    boxShadow: `0 0 0 1.5px rgba(255, 255, 255, 0.85), 0 0 5px ${color}80`,
                   }}
                 >
                   <AvatarSVG config={p.avatar} size={36} />
