@@ -44,6 +44,11 @@ export function applyMonopolyTheme(themeId: string): void {
     root.style.removeProperty('--menu-bg');
     root.style.removeProperty('--panel-bg');
     root.style.removeProperty('--panel-border');
+    root.style.removeProperty('--surface-bg');
+    root.style.removeProperty('--surface-elevated');
+    root.style.removeProperty('--surface-border');
+    root.style.removeProperty('--input-bg');
+    root.style.removeProperty('--input-border');
     root.style.removeProperty('--ui-text');
     root.style.removeProperty('--ui-muted');
     return;
@@ -62,6 +67,11 @@ export function applyMonopolyTheme(themeId: string): void {
   root.style.setProperty('--menu-bg', `radial-gradient(circle at top, ${colors.subAlt} 0%, ${colors.bg} 100%)`);
   root.style.setProperty('--panel-bg', colors.subAlt);
   root.style.setProperty('--panel-border', `${colors.main}44`);
+  root.style.setProperty('--surface-bg', `${colors.bg}cc`);
+  root.style.setProperty('--surface-elevated', `${colors.bg}ee`);
+  root.style.setProperty('--surface-border', `${colors.main}33`);
+  root.style.setProperty('--input-bg', colors.bg);
+  root.style.setProperty('--input-border', `${colors.main}55`);
   root.style.setProperty('--ui-text', colors.text);
   root.style.setProperty('--ui-muted', colors.sub);
 }

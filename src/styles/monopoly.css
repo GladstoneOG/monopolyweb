@@ -673,18 +673,6 @@
   50% { transform: rotateZ(-45deg) rotateX(-42deg) translateY(-16px); }
 }
 
-.token-pedestal {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 34px;
-  height: 34px;
-  margin: -17px 0 0 -17px;
-  border-radius: 50%;
-  border: 1.5px solid #ffffff;
-  transform: rotateX(90deg) translateZ(-12px);
-}
-
 .token-avatar-wrapper {
   width: 42px;
   height: 42px;

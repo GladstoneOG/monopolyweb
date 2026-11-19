@@ -69,18 +69,10 @@ export const PlayerTokensLayer: React.FC<PlayerTokensLayerProps> = React.memo(
                 {steps > 0 && <div className="token-countdown-badge">{steps}</div>}
 
                 <div
-                  className="token-pedestal"
-                  style={{
-                    background: color,
-                    boxShadow: `0 2px 4px rgba(0,0,0,0.45), 0 0 10px ${color}`,
-                  }}
-                />
-
-                <div
                   className="token-avatar-wrapper"
                   style={{
                     borderColor: color,
-                    boxShadow: `0 4px 10px rgba(0,0,0,0.4), 0 0 10px ${color}aa`,
+                    boxShadow: `0 6px 14px rgba(0,0,0,0.52), 0 0 10px ${color}99`,
                   }}
                 >
                   <AvatarSVG config={p.avatar} size={36} />

@@ -1,12 +1,17 @@
 /* src/styles/base.css */
 :root {
   --font-main: 'Outfit', system-ui, -apple-system, sans-serif;
-  --menu-bg: radial-gradient(circle at top, #f8fafc 0%, #cbd5e1 100%);
+  --menu-bg: radial-gradient(circle at 50% 0%, #144230 0%, #0b261c 56%, #061610 100%);
   --tabletop-bg: radial-gradient(circle at center, #5a3d28 0%, #241710 100%);
-  --panel-bg: rgba(255, 255, 255, 0.94);
-  --panel-border: rgba(15, 23, 42, 0.12);
-  --ui-text: #0f172a;
-  --ui-muted: #475569;
+  --panel-bg: rgba(10, 31, 24, 0.92);
+  --panel-border: rgba(52, 211, 153, 0.22);
+  --surface-bg: rgba(17, 46, 36, 0.78);
+  --surface-elevated: rgba(22, 58, 45, 0.85);
+  --surface-border: rgba(110, 231, 183, 0.16);
+  --input-bg: rgba(6, 20, 15, 0.78);
+  --input-border: rgba(110, 231, 183, 0.26);
+  --ui-text: #ecfdf5;
+  --ui-muted: #94b8a8;
   --accent-primary: #10b981;
   --accent-gold: #f59e0b;
 }
@@ -106,11 +111,15 @@ button:disabled {
 }
 
 .btn-utility {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(16, 185, 129, 0.14);
   color: var(--ui-text);
   border: 1px solid var(--panel-border);
   padding: 8px 12px;
   font-size: 0.82rem;
+}
+
+.btn-utility:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.24);
 }
 
 .btn-primary.mini,
@@ -165,7 +174,7 @@ button:disabled {
   border: 1px solid var(--panel-border);
   border-radius: 24px;
   padding: 28px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -180,12 +189,13 @@ button:disabled {
   font-size: 2.6rem;
   font-weight: 900;
   letter-spacing: 3px;
-  color: #ef4444;
-  background: #ffffff;
-  border: 5px solid #0f172a;
-  border-radius: 6px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+  border: 4px solid #f8fafc;
+  border-radius: 8px;
   padding: 6px 28px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
 }
 
 .menu-subtitle {
@@ -202,29 +212,30 @@ button:disabled {
 
 .mode-card {
   text-align: left;
-  background: rgba(255, 255, 255, 0.85);
-  border: 2px solid rgba(15, 23, 42, 0.12);
+  background: var(--surface-bg);
+  border: 2px solid var(--surface-border);
   border-radius: 14px;
   padding: 14px 16px;
   cursor: pointer;
-  color: #0f172a;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+  color: var(--ui-text);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease, background 0.18s ease;
 }
 
 .mode-card:hover {
   transform: translateY(-2px);
+  background: var(--surface-elevated);
 }
 
 .mode-card.active-getrich {
   border-color: #f59e0b;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22);
-  background: #fffbeb;
+  background: rgba(245, 158, 11, 0.14);
 }
 
 .mode-card.active-classic {
   border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
-  background: #ecfdf5;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.24);
+  background: rgba(16, 185, 129, 0.16);
 }
 
 .mode-card-title {
@@ -235,7 +246,7 @@ button:disabled {
 
 .mode-card-desc {
   font-size: 0.78rem;
-  color: #475569;
+  color: var(--ui-muted);
   line-height: 1.4;
 }
 
@@ -265,11 +276,17 @@ button:disabled {
 .settings-row select {
   padding: 10px 12px;
   border-radius: 10px;
-  border: 1.5px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1.5px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--ui-text);
   font-size: 0.92rem;
   font-weight: 600;
+}
+
+.control-group select option,
+.settings-row select option {
+  background: #0b241b;
+  color: #ecfdf5;
 }
 
 /* Avatar Creator */
@@ -277,11 +294,11 @@ button:disabled {
   display: flex;
   gap: 18px;
   align-items: center;
-  background: rgba(248, 250, 252, 0.9);
-  border: 1px solid #e2e8f0;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 16px;
   padding: 14px 16px;
-  color: #0f172a;
+  color: var(--ui-text);
 }
 
 .avatar-preview-box {
@@ -297,9 +314,9 @@ button:disabled {
   font-size: 0.75rem;
   font-weight: 700;
   border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  background: #f1f5f9;
-  color: #0f172a;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--ui-text);
   cursor: pointer;
 }
 
@@ -319,7 +336,7 @@ button:disabled {
 .control-group label {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #64748b;
+  color: var(--ui-muted);
   text-transform: uppercase;
 }
 
@@ -337,13 +354,13 @@ button:disabled {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  border: 2px solid rgba(15, 23, 42, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.25);
   cursor: pointer;
   padding: 0;
 }
 
 .color-dot.selected {
-  border: 3px solid #0f172a;
+  border: 3px solid #fbbf24;
   transform: scale(1.14);
 }
 
@@ -357,11 +374,17 @@ button:disabled {
   flex: 1;
   padding: 11px 14px;
   border-radius: 12px;
-  border: 1.5px solid #cbd5e1;
-  background: #ffffff;
-  color: #0f172a;
+  border: 1.5px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--ui-text);
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+.host-password-input::placeholder,
+.name-input-group input::placeholder,
+.lobby-pw-prompt input::placeholder {
+  color: rgba(148, 184, 168, 0.62);
 }
 
 .host-game-btn {
@@ -371,11 +394,11 @@ button:disabled {
 }
 
 .lobby-browser-section {
-  background: rgba(248, 250, 252, 0.92);
-  border: 1px solid #e2e8f0;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 16px;
   padding: 14px 16px;
-  color: #0f172a;
+  color: var(--ui-text);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -396,8 +419,8 @@ button:disabled {
 }
 
 .lobby-count-pill {
-  background: #e2e8f0;
-  color: #334155;
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
   font-size: 0.74rem;
   font-weight: 900;
   padding: 2px 8px;
@@ -420,16 +443,16 @@ button:disabled {
 .lobby-browser-empty {
   text-align: center;
   padding: 20px 12px;
-  color: #64748b;
+  color: var(--ui-muted);
   font-size: 0.84rem;
-  border: 1.5px dashed #cbd5e1;
+  border: 1.5px dashed var(--surface-border);
   border-radius: 12px;
-  background: #ffffff;
+  background: var(--input-bg);
 }
 
 .lobby-browser-row {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-elevated);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 10px 12px;
   display: flex;
@@ -461,6 +484,7 @@ button:disabled {
 .lobby-host-name {
   font-size: 0.94rem;
   font-weight: 800;
+  color: var(--ui-text);
 }
 
 .lobby-rule-pill,
@@ -472,18 +496,18 @@ button:disabled {
 }
 
 .lobby-rule-pill.getrich {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
 }
 
 .lobby-rule-pill.classic {
-  background: #d1fae5;
-  color: #047857;
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
 }
 
 .lobby-lock-pill {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: rgba(139, 92, 246, 0.25);
+  color: #ddd6fe;
 }
 
 .lobby-row-meta {
@@ -492,12 +516,12 @@ button:disabled {
   gap: 10px;
   font-size: 0.76rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--ui-muted);
 }
 
-.lobby-status-dot.open { color: #059669; }
-.lobby-status-dot.playing { color: #d97706; }
-.lobby-code-subtle { color: #94a3b8; font-family: ui-monospace, monospace; }
+.lobby-status-dot.open { color: #34d399; }
+.lobby-status-dot.playing { color: #fbbf24; }
+.lobby-code-subtle { color: rgba(148, 184, 168, 0.75); font-family: ui-monospace, monospace; }
 
 .lobby-join-btn {
   padding: 8px 16px;
@@ -510,7 +534,7 @@ button:disabled {
   gap: 8px;
   align-items: center;
   padding-top: 8px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--surface-border);
 }
 
 .lobby-pw-prompt input {
@@ -518,8 +542,9 @@ button:disabled {
   padding: 7px 10px;
   border-radius: 8px;
   border: 1.5px solid #8b5cf6;
+  background: var(--input-bg);
   font-size: 0.84rem;
-  color: #0f172a;
+  color: var(--ui-text);
 }
 
 .btn-utility.mini {
@@ -535,15 +560,15 @@ button:disabled {
 }
 
 .menu-alert.error {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
 }
 
 .menu-alert.info {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
 }
 
 /* ==================== Lobby Screen ==================== */
@@ -554,7 +579,7 @@ button:disabled {
   border: 1px solid var(--panel-border);
   border-radius: 24px;
   padding: 26px;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -582,12 +607,12 @@ button:disabled {
 }
 
 .lobby-code-badge {
-  background: rgba(234, 179, 8, 0.12);
-  border: 2px dashed #eab308;
+  background: rgba(251, 191, 36, 0.14);
+  border: 2px dashed #fbbf24;
   border-radius: 10px;
   padding: 6px 14px;
   font-size: 0.95rem;
-  color: #0f172a;
+  color: #fde68a;
   cursor: pointer;
 }
 
@@ -599,28 +624,28 @@ button:disabled {
 }
 
 .conn-pill.badge-p2p {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
 }
 
 .conn-pill.badge-relay {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
 }
 
 .conn-pill.badge-local {
-  background: #f3e8ff;
-  color: #6b21a8;
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
 }
 
 .conn-pill.badge-connecting {
-  background: #fef9c3;
-  color: #a16207;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
 }
 
 .conn-pill.badge-offline {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
 }
 
 .lobby-top-actions {
@@ -636,11 +661,11 @@ button:disabled {
 }
 
 .lobby-section {
-  background: rgba(248, 250, 252, 0.92);
-  border: 1px solid #e2e8f0;
+  background: var(--surface-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 16px;
   padding: 16px;
-  color: #0f172a;
+  color: var(--ui-text);
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -668,8 +693,8 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--surface-elevated);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 10px 12px;
 }
@@ -678,7 +703,8 @@ button:disabled {
   justify-content: center;
   min-height: 64px;
   border-style: dashed;
-  color: #94a3b8;
+  background: var(--input-bg);
+  color: var(--ui-muted);
   font-size: 0.82rem;
 }
 
@@ -706,34 +732,34 @@ button:disabled {
 }
 
 .player-tag.host {
-  background: #d1fae5;
-  color: #047857;
+  background: rgba(16, 185, 129, 0.22);
+  color: #6ee7b7;
 }
 
 .player-tag.bot {
-  background: #e0f2fe;
-  color: #0369a1;
+  background: rgba(56, 189, 248, 0.2);
+  color: #7dd3fc;
 }
 
 .player-tag.ready {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(34, 197, 94, 0.24);
+  color: #86efac;
 }
 
 .player-tag.waiting {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
 }
 
 .player-tag.link {
-  background: #f1f5f9;
-  color: #334155;
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
 }
 
 .lobby-remove-btn {
   border: none;
-  background: #fee2e2;
-  color: #b91c1c;
+  background: rgba(239, 68, 68, 0.22);
+  color: #fca5a5;
   width: 28px;
   height: 28px;
   border-radius: 8px;
@@ -757,16 +783,16 @@ button:disabled {
 .settings-row label {
   font-weight: 700;
   font-size: 0.88rem;
-  color: #334155;
+  color: var(--ui-muted);
 }
 
 .rules-summary-box {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--input-bg);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 12px 14px;
   font-size: 0.78rem;
-  color: #475569;
+  color: var(--ui-muted);
 }
 
 .rules-summary-box ul {
