@@ -1,10 +1,11 @@
 // src/components/modals/DiceRollModal.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { sfx } from '../../utils/audio';
 
 interface DiceRollModalProps {
   rollId: string | null;
-  dice: [number, number];
+  die1: number;
+  die2: number;
   activePlayerColor: string;
   activePlayerName: string;
   onAnimationChange: (isRolling: boolean) => void;
@@ -38,20 +39,41 @@ const DieFace: React.FC<{ value: number; rolling: boolean; tint: string }> = ({
 };
 
 /**
- * Self-contained dice roll animation modal — shuffling at 60ms ONLY re-renders this tiny modal!
+ * Self-contained dice roll animation modal.
+ * Strictly guarded by lastPlayedRollIdRef so unrelated room state updates
+ * (buy, build, trade, status, end-turn) NEVER re-open the dice popup!
  */
 export const DiceRollModal: React.FC<DiceRollModalProps> = React.memo(
-  ({ rollId, dice, activePlayerColor, activePlayerName, onAnimationChange }) => {
+  ({ rollId, die1, die2, activePlayerColor, activePlayerName, onAnimationChange }) => {
     const [visible, setVisible] = useState(false);
     const [phase, setPhase] = useState<'rolling' | 'settled'>('rolling');
     const [displayDice, setDisplayDice] = useState<[number, number]>([1, 1]);
 
-    useEffect(() => {
-      if (!rollId) return;
+    const lastPlayedRollIdRef = useRef<string | null>(null);
+    const onAnimRef = useRef(onAnimationChange);
+    onAnimRef.current = onAnimationChange;
 
+    const latestDiceRef = useRef<[number, number]>([die1, die2]);
+    latestDiceRef.current = [die1, die2];
+
+    useEffect(() => {
+      if (!rollId) {
+        lastPlayedRollIdRef.current = null;
+        setVisible(false);
+        onAnimRef.current(false);
+        return;
+      }
+
+      // Already played animation for this exact rollId -> ignore subsequent state updates!
+      if (rollId === lastPlayedRollIdRef.current) {
+        return;
+      }
+      lastPlayedRollIdRef.current = rollId;
+
+      const settled: [number, number] = [latestDiceRef.current[0], latestDiceRef.current[1]];
       setVisible(true);
       setPhase('rolling');
-      onAnimationChange(true);
+      onAnimRef.current(true);
       sfx.playDiceRoll();
 
       const shuffleInterval = setInterval(() => {
@@ -63,22 +85,23 @@ export const DiceRollModal: React.FC<DiceRollModalProps> = React.memo(
 
       const settleTimer = setTimeout(() => {
         clearInterval(shuffleInterval);
-        setDisplayDice(dice);
+        setDisplayDice(settled);
         setPhase('settled');
         sfx.playDiceLand();
       }, 1000);
 
       const closeTimer = setTimeout(() => {
         setVisible(false);
-        onAnimationChange(false);
+        onAnimRef.current(false);
       }, 2150);
 
       return () => {
         clearInterval(shuffleInterval);
         clearTimeout(settleTimer);
         clearTimeout(closeTimer);
+        onAnimRef.current(false);
       };
-    }, [rollId, dice, onAnimationChange]);
+    }, [rollId]);
 
     if (!visible) return null;
 

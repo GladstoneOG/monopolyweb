@@ -2,9 +2,15 @@
 import { DurableObject } from 'cloudflare:workers';
 import type {
   ClientSignalMessage,
+  LobbySummary,
   PeerDescriptor,
   ServerSignalMessage,
 } from './protocol';
+
+export interface SignalRoomEnv {
+  ASSETS: Fetcher;
+  SIGNAL_ROOM: DurableObjectNamespace<SignalRoomDO>;
+}
 
 interface SocketAttachment {
   peerId: string;
@@ -18,19 +24,40 @@ interface PendingHostMigration {
   disconnectedAt: number;
 }
 
-const MAX_PEERS = 4;
-const HOST_MIGRATION_GRACE_MS = 5_000;
-const STORAGE_ROOM_META = 'room_meta';
-const STORAGE_PENDING_MIGRATION = 'pending_host_migration';
-
 interface RoomMeta {
   code: string;
   createdAt: number;
+  password: string;
+  hostName: string;
+  ruleset: 'Classic' | 'Get Rich';
+  playerCount: number;
+  status: 'lobby' | 'playing';
+  admittedSessions: string[];
 }
 
-export class SignalRoomDO extends DurableObject {
+export const LOBBY_DIRECTORY_ID = '__LOBBY_DIRECTORY__';
+
+const MAX_PEERS = 4;
+const HOST_MIGRATION_GRACE_MS = 5_000;
+const DIRECTORY_STALE_MS = 10 * 60 * 1000;
+const STORAGE_ROOM_META = 'room_meta';
+const STORAGE_PENDING_MIGRATION = 'pending_host_migration';
+const DIRECTORY_KEY_PREFIX = 'lobby:';
+
+export class SignalRoomDO extends DurableObject<SignalRoomEnv> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+
+    // =================================================================
+    // Mode 1: Singleton Lobby Directory HTTP endpoints
+    // =================================================================
+    if (url.pathname.startsWith('/directory/')) {
+      return this.handleDirectoryRequest(request, url);
+    }
+
+    // =================================================================
+    // Mode 2: Room WebSocket Signaling + Password Gate
+    // =================================================================
     const upgradeHeader = request.headers.get('Upgrade');
     if (upgradeHeader !== 'websocket') {
       return new Response('Expected WebSocket upgrade', { status: 426 });
@@ -39,27 +66,31 @@ export class SignalRoomDO extends DurableObject {
     const code = (url.searchParams.get('code') || '').toUpperCase();
     const role = url.searchParams.get('role') || 'join';
     const sessionId = url.searchParams.get('sessionId') || crypto.randomUUID();
+    const providedPassword = (url.searchParams.get('password') || '').trim();
+    const hostNameParam = (url.searchParams.get('hostName') || 'Host').trim().slice(0, 24);
+    const rulesetParam: 'Classic' | 'Get Rich' =
+      url.searchParams.get('ruleset') === 'Classic' ? 'Classic' : 'Get Rich';
 
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
 
     const existingSockets = this.getActivePeers();
-    const roomMeta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
+    let roomMeta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
     const pendingMigration = await this.ctx.storage.get<PendingHostMigration>(
       STORAGE_PENDING_MIGRATION
     );
 
-    // Check if this sessionId is reconnecting
     const sameSession = existingSockets.find((s) => s.meta.sessionId === sessionId);
     const isReturningHost =
       pendingMigration !== undefined && pendingMigration.hostSessionId === sessionId;
+    const isPreviouslyAdmitted = Boolean(roomMeta?.admittedSessions?.includes(sessionId));
 
     if (role === 'join' && !roomMeta && existingSockets.length === 0) {
       server.accept();
       this.sendJson(server, {
         type: 'room-error',
-        message: 'Room not found. Check the 4-letter code or create a new room.',
+        message: 'Lobby no longer exists. Refresh the lobby list to see active rooms.',
       });
       server.close(4004, 'Room not found');
       return new Response(null, { status: 101, webSocket: client });
@@ -75,12 +106,32 @@ export class SignalRoomDO extends DurableObject {
       return new Response(null, { status: 101, webSocket: client });
     }
 
+    // Password check for joining peers (skip if already admitted/reconnecting)
+    if (
+      role === 'join' &&
+      roomMeta &&
+      roomMeta.password &&
+      !sameSession &&
+      !isReturningHost &&
+      !isPreviouslyAdmitted
+    ) {
+      if (providedPassword !== roomMeta.password) {
+        server.accept();
+        this.sendJson(server, {
+          type: 'room-error',
+          message: 'Incorrect room password.',
+        });
+        server.close(4003, 'Invalid password');
+        return new Response(null, { status: 101, webSocket: client });
+      }
+    }
+
     // Close any stale socket belonging to the same sessionId
     if (sameSession) {
       try {
         sameSession.ws.close(4000, 'Replaced by new connection');
       } catch {
-        // ignore close errors
+        // ignore
       }
     }
 
@@ -89,19 +140,28 @@ export class SignalRoomDO extends DurableObject {
       server.accept();
       this.sendJson(server, {
         type: 'room-error',
-        message: `Room is full (max ${MAX_PEERS} human players).`,
+        message: `Room is full (max ${MAX_PEERS} players).`,
       });
       server.close(4008, 'Room full');
       return new Response(null, { status: 101, webSocket: client });
     }
 
-    // Persist room metadata on creation
+    // Create or update room metadata
     if (!roomMeta) {
-      await this.ctx.storage.put<RoomMeta>(STORAGE_ROOM_META, {
+      roomMeta = {
         code,
         createdAt: Date.now(),
-      });
+        password: providedPassword,
+        hostName: hostNameParam || 'Host',
+        ruleset: rulesetParam,
+        playerCount: 1,
+        status: 'lobby',
+        admittedSessions: [sessionId],
+      };
+    } else if (!roomMeta.admittedSessions.includes(sessionId)) {
+      roomMeta.admittedSessions = [...roomMeta.admittedSessions, sessionId];
     }
+    await this.ctx.storage.put<RoomMeta>(STORAGE_ROOM_META, roomMeta);
 
     const peerId = `p_${crypto.randomUUID().slice(0, 8)}`;
     const hasConnectedHost = remainingPeers.some((p) => p.meta.isHost);
@@ -130,6 +190,9 @@ export class SignalRoomDO extends DurableObject {
     const currentHost = allPeers.find((p) => p.meta.isHost);
     const hostPeerId = currentHost ? currentHost.meta.peerId : peerId;
 
+    // Publish room to directory immediately on create/rejoin
+    await this.publishToDirectory(roomMeta);
+
     this.sendJson(server, {
       type: 'room-welcome',
       code,
@@ -140,7 +203,6 @@ export class SignalRoomDO extends DurableObject {
       restored: Boolean(sameSession || isReturningHost),
     });
 
-    // Notify everyone else
     this.broadcastExcept(peerId, {
       type: 'peer-joined',
       peer: this.toDescriptor(attachment),
@@ -165,6 +227,25 @@ export class SignalRoomDO extends DurableObject {
     switch (parsed.type) {
       case 'heartbeat-ping': {
         this.sendJson(ws, { type: 'heartbeat-pong', ts: parsed.ts });
+        if (sender.isHost) {
+          const meta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
+          if (meta) {
+            await this.publishToDirectory(meta);
+          }
+        }
+        break;
+      }
+
+      case 'room-meta-update': {
+        if (!sender.isHost) return;
+        const meta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
+        if (!meta) return;
+        meta.hostName = (parsed.hostName || meta.hostName).slice(0, 24);
+        meta.ruleset = parsed.ruleset === 'Classic' ? 'Classic' : 'Get Rich';
+        meta.playerCount = Math.max(1, Math.min(MAX_PEERS, Number(parsed.playerCount) || 1));
+        meta.status = parsed.status === 'playing' ? 'playing' : 'lobby';
+        await this.ctx.storage.put<RoomMeta>(STORAGE_ROOM_META, meta);
+        await this.publishToDirectory(meta);
         break;
       }
 
@@ -217,7 +298,6 @@ export class SignalRoomDO extends DurableObject {
       }
 
       case 'relay-to-peer': {
-        // Only the host may direct relay envelopes to specific peers
         if (!sender.isHost) return;
         const target = this.findSocketByPeerId(parsed.targetPeerId);
         if (target) {
@@ -231,7 +311,6 @@ export class SignalRoomDO extends DurableObject {
       }
 
       case 'relay-broadcast': {
-        // Only the host may broadcast authoritative state/events via relay
         if (!sender.isHost) return;
         this.broadcastExcept(sender.peerId, {
           type: 'relay-envelope',
@@ -256,14 +335,16 @@ export class SignalRoomDO extends DurableObject {
       STORAGE_PENDING_MIGRATION
     );
     const active = this.getActivePeers();
+    const meta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
 
     if (active.length === 0) {
-      // Room is completely empty -> clean up storage so code can be recycled
+      if (meta?.code) {
+        await this.removeFromDirectory(meta.code);
+      }
       await this.ctx.storage.deleteAll();
       return;
     }
 
-    // If a host already reconnected, nothing to do
     if (active.some((p) => p.meta.isHost)) {
       if (pending) {
         await this.ctx.storage.delete(STORAGE_PENDING_MIGRATION);
@@ -271,7 +352,6 @@ export class SignalRoomDO extends DurableObject {
       return;
     }
 
-    // Promote the earliest-joined connected peer deterministically
     active.sort((a, b) => a.meta.joinedAt - b.meta.joinedAt);
     const nextHost = active[0];
     const updatedMeta: SocketAttachment = { ...nextHost.meta, isHost: true };
@@ -286,6 +366,106 @@ export class SignalRoomDO extends DurableObject {
       newHostPeerId: updatedMeta.peerId,
       peers: peerList,
     });
+  }
+
+  // =================================================================
+  // Directory Handler (when invoked as __LOBBY_DIRECTORY__)
+  // =================================================================
+
+  private async handleDirectoryRequest(request: Request, url: URL): Promise<Response> {
+    if (url.pathname === '/directory/list' && request.method === 'GET') {
+      const entries = await this.ctx.storage.list<LobbySummary>({
+        prefix: DIRECTORY_KEY_PREFIX,
+      });
+      const now = Date.now();
+      const staleKeys: string[] = [];
+      const active: LobbySummary[] = [];
+
+      for (const [key, summary] of entries) {
+        if (!summary || now - summary.updatedAt > DIRECTORY_STALE_MS) {
+          staleKeys.push(key);
+        } else {
+          active.push(summary);
+        }
+      }
+      if (staleKeys.length > 0) {
+        await this.ctx.storage.delete(staleKeys);
+      }
+
+      // Open lobbies first, then most recently updated
+      active.sort((a, b) => {
+        if (a.status !== b.status) return a.status === 'lobby' ? -1 : 1;
+        return b.updatedAt - a.updatedAt;
+      });
+
+      return Response.json(
+        { lobbies: active },
+        { headers: { 'Cache-Control': 'no-store' } }
+      );
+    }
+
+    if (url.pathname === '/directory/upsert' && request.method === 'POST') {
+      const summary = (await request.json()) as LobbySummary;
+      if (!summary?.code) return new Response('Bad request', { status: 400 });
+      await this.ctx.storage.put<LobbySummary>(
+        `${DIRECTORY_KEY_PREFIX}${summary.code.toUpperCase()}`,
+        {
+          ...summary,
+          code: summary.code.toUpperCase(),
+          updatedAt: Date.now(),
+        }
+      );
+      return new Response('ok');
+    }
+
+    if (url.pathname.startsWith('/directory/delete/') && request.method === 'DELETE') {
+      const code = url.pathname.slice('/directory/delete/'.length).toUpperCase();
+      if (code) {
+        await this.ctx.storage.delete(`${DIRECTORY_KEY_PREFIX}${code}`);
+      }
+      return new Response('ok');
+    }
+
+    return new Response('Not found', { status: 404 });
+  }
+
+  private async publishToDirectory(meta: RoomMeta): Promise<void> {
+    if (!meta.code) return;
+    try {
+      const dirStub = this.env.SIGNAL_ROOM.get(
+        this.env.SIGNAL_ROOM.idFromName(LOBBY_DIRECTORY_ID)
+      );
+      const summary: LobbySummary = {
+        code: meta.code,
+        hostName: meta.hostName,
+        ruleset: meta.ruleset,
+        playerCount: meta.playerCount,
+        maxPlayers: MAX_PEERS,
+        hasPassword: Boolean(meta.password),
+        status: meta.status,
+        updatedAt: Date.now(),
+      };
+      await dirStub.fetch('https://directory.internal/directory/upsert', {
+        method: 'POST',
+        body: JSON.stringify(summary),
+      });
+    } catch {
+      // non-fatal directory publish error
+    }
+  }
+
+  private async removeFromDirectory(code: string): Promise<void> {
+    if (!code) return;
+    try {
+      const dirStub = this.env.SIGNAL_ROOM.get(
+        this.env.SIGNAL_ROOM.idFromName(LOBBY_DIRECTORY_ID)
+      );
+      await dirStub.fetch(`https://directory.internal/directory/delete/${code}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      // ignore
+    }
   }
 
   private async handleDisconnect(ws: WebSocket): Promise<void> {
@@ -304,8 +484,13 @@ export class SignalRoomDO extends DurableObject {
       peers: peerList,
     });
 
+    const meta = await this.ctx.storage.get<RoomMeta>(STORAGE_ROOM_META);
+
     if (remaining.length === 0) {
-      // Keep room alive briefly for a refresh reconnect, then clean up
+      // Remove empty room from public lobby browser right away
+      if (meta?.code) {
+        await this.removeFromDirectory(meta.code);
+      }
       if (departed.isHost) {
         await this.ctx.storage.put<PendingHostMigration>(STORAGE_PENDING_MIGRATION, {
           hostSessionId: departed.sessionId,
@@ -367,7 +552,7 @@ export class SignalRoomDO extends DurableObject {
     try {
       ws.send(JSON.stringify(msg));
     } catch {
-      // ignore closed socket write errors
+      // ignore
     }
   }
 

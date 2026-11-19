@@ -1,12 +1,8 @@
 // worker/index.ts
-import { SignalRoomDO } from './SignalRoomDO';
+import { LOBBY_DIRECTORY_ID, SignalRoomDO, type SignalRoomEnv } from './SignalRoomDO';
 
 export { SignalRoomDO };
-
-export interface Env {
-  ASSETS: Fetcher;
-  SIGNAL_ROOM: DurableObjectNamespace<SignalRoomDO>;
-}
+export type Env = SignalRoomEnv;
 
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -30,6 +26,12 @@ export default {
         service: 'monopolyweb',
         architecture: 'host-and-peer-webrtc',
       });
+    }
+
+    if (url.pathname === '/api/lobbies' && request.method === 'GET') {
+      const dirId = env.SIGNAL_ROOM.idFromName(LOBBY_DIRECTORY_ID);
+      const dirStub = env.SIGNAL_ROOM.get(dirId);
+      return dirStub.fetch('https://directory.internal/directory/list');
     }
 
     if (url.pathname === '/api/rooms' && request.method === 'POST') {

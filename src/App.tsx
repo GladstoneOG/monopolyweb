@@ -1,7 +1,11 @@
 // src/App.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AvatarConfig, GameRules, MonopolyActionType, RoomState, Ruleset } from './engine/types';
-import { RoomSession } from './net/roomSession';
+import {
+  fetchActiveLobbies,
+  RoomSession,
+  type LobbySummary,
+} from './net/roomSession';
 import type { ChatMessage, PeerLinkMode } from './net/protocol';
 import { sfx } from './utils/audio';
 import { applyMonopolyTheme, getSavedMonopolyThemeKey } from './utils/themeBridge';
@@ -39,8 +43,11 @@ export function App() {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [myPlayerId, setMyPlayerId] = useState('');
   const [isHost, setIsHost] = useState(false);
-  const [connectionMode, setConnectionMode] = useState<PeerLinkMode>('local');
+  const [connectionMode, setConnectionMode] = useState<PeerLinkMode>('p2p-webrtc');
   const [peerModes, setPeerModes] = useState<Record<string, PeerLinkMode>>({});
+
+  const [lobbies, setLobbies] = useState<LobbySummary[]>([]);
+  const [isLoadingLobbies, setIsLoadingLobbies] = useState(false);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -58,12 +65,10 @@ export function App() {
   const isChatOpenRef = useRef(isChatOpen);
   isChatOpenRef.current = isChatOpen;
 
-  // Apply saved Monkeytype theme on boot
   useEffect(() => {
     applyMonopolyTheme(getSavedMonopolyThemeKey());
   }, []);
 
-  // Persist player profile
   useEffect(() => {
     try {
       localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify({ name: playerName, avatar }));
@@ -71,6 +76,28 @@ export function App() {
       // ignore
     }
   }, [playerName, avatar]);
+
+  const refreshLobbies = useCallback(async () => {
+    setIsLoadingLobbies(true);
+    try {
+      const list = await fetchActiveLobbies();
+      setLobbies(list);
+    } catch {
+      // keep previous list quietly on transient network hiccup
+    } finally {
+      setIsLoadingLobbies(false);
+    }
+  }, []);
+
+  // Poll live lobbies while on the Main Menu
+  useEffect(() => {
+    if (room) return;
+    void refreshLobbies();
+    const timer = setInterval(() => {
+      void refreshLobbies();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [room, refreshLobbies]);
 
   // Keyboard shortcut (`~`) for Host Dev Console
   useEffect(() => {
@@ -145,53 +172,46 @@ export function App() {
 
   const cleanName = playerName.trim() || 'Tycoon';
 
-  const handlePlaySolo = useCallback(() => {
-    setErrorMessage(null);
-    setChatMessages([]);
-    setUnreadChat(0);
-    const session = ensureSession();
-    session.startLocalLobby({
-      name: cleanName,
-      avatar,
-      rules: { ruleset: selectedRuleset },
-    });
-  }, [ensureSession, cleanName, avatar, selectedRuleset]);
-
-  const handleCreateOnline = useCallback(async () => {
-    setErrorMessage(null);
-    setBusyMessage('Creating P2P room on Cloudflare edge...');
-    setChatMessages([]);
-    setUnreadChat(0);
-    try {
-      const session = ensureSession();
-      await session.createOnlineRoom({
-        name: cleanName,
-        avatar,
-        rules: { ruleset: selectedRuleset },
-      });
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : 'Failed to create room.');
-    } finally {
-      setBusyMessage(null);
-    }
-  }, [ensureSession, cleanName, avatar, selectedRuleset]);
-
-  const handleJoinOnline = useCallback(
-    async (code: string) => {
+  const handleHostGame = useCallback(
+    async (password: string) => {
       setErrorMessage(null);
-      setBusyMessage(`Joining room ${code}...`);
+      setBusyMessage('Hosting room on Cloudflare edge...');
       setChatMessages([]);
       setUnreadChat(0);
       try {
         const session = ensureSession();
-        await session.joinOnlineRoom({ code, name: cleanName, avatar });
+        await session.createOnlineRoom({
+          name: cleanName,
+          avatar,
+          rules: { ruleset: selectedRuleset },
+          password: password || undefined,
+        });
       } catch (err) {
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to join room.');
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to host room.');
       } finally {
         setBusyMessage(null);
       }
     },
-    [ensureSession, cleanName, avatar]
+    [ensureSession, cleanName, avatar, selectedRuleset]
+  );
+
+  const handleJoinLobby = useCallback(
+    async (code: string, password?: string) => {
+      setErrorMessage(null);
+      setBusyMessage(`Joining lobby #${code}...`);
+      setChatMessages([]);
+      setUnreadChat(0);
+      try {
+        const session = ensureSession();
+        await session.joinOnlineRoom({ code, name: cleanName, avatar, password });
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to join lobby.');
+        void refreshLobbies();
+      } finally {
+        setBusyMessage(null);
+      }
+    },
+    [ensureSession, cleanName, avatar, refreshLobbies]
   );
 
   const handleLeave = useCallback(() => {
@@ -238,9 +258,11 @@ export function App() {
           isMuted={isMuted}
           onToggleMute={toggleMute}
           onOpenThemes={() => setIsThemeModalOpen(true)}
-          onPlaySolo={handlePlaySolo}
-          onCreateOnline={handleCreateOnline}
-          onJoinOnline={handleJoinOnline}
+          lobbies={lobbies}
+          isLoadingLobbies={isLoadingLobbies}
+          onRefreshLobbies={() => void refreshLobbies()}
+          onHostGame={handleHostGame}
+          onJoinLobby={handleJoinLobby}
           busyMessage={busyMessage}
           errorMessage={errorMessage}
         />
@@ -251,7 +273,7 @@ export function App() {
           room={room}
           myPlayerId={myPlayerId}
           isHost={isHost}
-          isLocalOnly={sessionRef.current?.getIsLocalOnly() ?? true}
+          isLocalOnly={sessionRef.current?.getIsLocalOnly() ?? false}
           connectionMode={connectionMode}
           peerModes={peerModes}
           onUpdateRules={handleUpdateRules}

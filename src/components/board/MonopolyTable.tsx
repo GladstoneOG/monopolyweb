@@ -353,7 +353,30 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
     (p) => visualPositions[p.id] !== undefined && visualPositions[p.id] !== p.position
   );
   const isAnimating =
-    isDiceRolling || isAnyoneMoving || jailAnimActive || introState.active;
+    isDiceRolling ||
+    isAnyoneMoving ||
+    jailAnimActive ||
+    introState.active ||
+    Boolean(flyingCard);
+
+  // Deadlock-proof watchdog: if a backgrounded tab drops a hop timer, snap visualPositions cleanly
+  useEffect(() => {
+    if (!isAnyoneMoving || isDiceRolling) return;
+    const watchdog = setTimeout(() => {
+      setVisualPositions((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const p of players) {
+          if (next[p.id] !== p.position && !hopTimersRef.current[p.id]) {
+            next[p.id] = p.position;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, 3500);
+    return () => clearTimeout(watchdog);
+  }, [isAnyoneMoving, isDiceRolling, players]);
 
   // Dynamic camera focus based on game phase (when not in manual pan)
   useEffect(() => {
@@ -1049,7 +1072,8 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
       {/* Isolated Dice Modal */}
       <DiceRollModal
         rollId={rollId}
-        dice={dice}
+        die1={dice[0]}
+        die2={dice[1]}
         activePlayerColor={getPlayerColor(players, activePlayer?.id ?? null)}
         activePlayerName={activePlayer?.name ?? 'Player'}
         onAnimationChange={setIsDiceRolling}

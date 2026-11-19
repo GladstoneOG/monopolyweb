@@ -1,7 +1,7 @@
 // tests/hostPeer.test.ts
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createLobbyRoom, cloneState } from '../src/engine';
-import { HostController } from '../src/net/hostController';
+import { computeAnimationHoldMs, HostController } from '../src/net/hostController';
 import { PeerClient } from '../src/net/peerClient';
 import type { HostToPeerMessage, PeerToHostMessage } from '../src/net/protocol';
 import { DEFAULT_AVATAR } from '../src/components/shared/AvatarCreator';
@@ -206,5 +206,55 @@ describe('Host-and-Peer Controller, Authorization & Host Migration', () => {
     expect(host.getRoom().players[1].disconnected).toBe(false);
     expect(host.getRoom().board[1].owner).toBe('peer_new');
     host.dispose();
+  });
+
+  it('paces bots and next player until previous animation finishes without deadlocking', () => {
+    vi.useFakeTimers();
+    try {
+      const initialRoom = createLobbyRoom({
+        code: 'PACE',
+        host: { id: 'host_1', sessionId: 's_host', name: 'Alice', avatar: DEFAULT_AVATAR },
+        rules: { ruleset: 'Classic', startingCash: 1500, turnLimit: 0 },
+      });
+
+      const host = new HostController({
+        initialRoom,
+        hostPeerId: 'host_1',
+        botDelayMs: 600,
+        effectDelayScale: 1,
+        transport: { sendToPeer: () => {}, broadcast: () => {} },
+        callbacks: { onStateChange: () => {}, onChatMessage: () => {} },
+      });
+
+      host.addBot();
+      host.startGame();
+
+      // Right after startGame, intro curtain hold (~2600ms) blocks early roll
+      host.dispatchLocalAction('roll-dice');
+      expect(host.getRoom().phase).toBe('roll');
+
+      // After intro hold expires, human can roll cleanly (zero deadlock!)
+      vi.advanceTimersByTime(2700);
+      host.dispatchLocalAction('dev-command', { commandStr: 'setroll 5 6' }); // 11 steps -> ~2870ms hop
+      host.dispatchLocalAction('roll-dice');
+      expect(host.getRoom().phase).toBe('rolling_animation');
+
+      // Advance past dice modal (2200ms) -> token starts hopping 11 spaces
+      vi.advanceTimersByTime(2200);
+      expect(host.getRoom().players[0].position).toBe(11);
+      const holdLeft = host.getRemainingAnimationHoldMs();
+      expect(holdLeft).toBeGreaterThan(2000);
+      expect(holdLeft).toBeLessThanOrEqual(3400);
+
+      // Compute hold helper strictly caps huge hops
+      const prevSnap = cloneState(host.getRoom());
+      const nextSnap = cloneState(host.getRoom());
+      nextSnap.players[0].position = 35; // 24 spaces
+      expect(computeAnimationHoldMs(prevSnap, nextSnap)).toBe(3400);
+
+      host.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -1,6 +1,7 @@
 // src/net/roomSession.ts
 import type {
   ClientSignalMessage,
+  LobbySummary,
   PeerDescriptor,
   ServerSignalMessage,
 } from '../../worker/protocol';
@@ -25,6 +26,17 @@ import type {
   PeerToHostMessage,
 } from './protocol';
 import { WebRtcPeerLink } from './webrtcChannel';
+
+export type { LobbySummary };
+
+export async function fetchActiveLobbies(): Promise<LobbySummary[]> {
+  const resp = await fetch('/api/lobbies', { cache: 'no-store' });
+  if (!resp.ok) {
+    throw new Error('Could not load active lobbies.');
+  }
+  const data = (await resp.json()) as { lobbies?: LobbySummary[] };
+  return Array.isArray(data.lobbies) ? data.lobbies : [];
+}
 
 export interface RoomSessionCallbacks {
   onStateChange(room: RoomState, myPlayerId: string, isHost: boolean): void;
@@ -62,6 +74,7 @@ export class RoomSession {
   private isLocalOnly = false;
   private sessionId = getOrCreateSessionId();
   private profile: { name: string; avatar: AvatarConfig } | null = null;
+  private lastPublishedMetaKey = '';
 
   private hostController: HostController | null = null;
   private peerClient: PeerClient | null = null;
@@ -86,60 +99,6 @@ export class RoomSession {
   }
 
   // =====================================================================
-  // Singleplayer Local Mode (Same Engine, Zero Network)
-  // =====================================================================
-
-  public startLocalLobby(params: {
-    name: string;
-    avatar: AvatarConfig;
-    rules?: Partial<GameRules>;
-  }): void {
-    this.dispose();
-    this.disposed = false;
-    this.isLocalOnly = true;
-    this.isHost = true;
-    this.myPeerId = 'local_host';
-    this.hostPeerId = 'local_host';
-    this.profile = { name: params.name, avatar: params.avatar };
-
-    const initialRoom = createLobbyRoom({
-      code: 'SOLO',
-      host: {
-        id: this.myPeerId,
-        sessionId: this.sessionId,
-        name: params.name,
-        avatar: params.avatar,
-      },
-      rules: params.rules,
-    });
-
-    this.hostController = new HostController({
-      initialRoom,
-      hostPeerId: this.myPeerId,
-      transport: {
-        sendToPeer: () => {},
-        broadcast: () => {},
-      },
-      callbacks: {
-        onStateChange: (room) => {
-          this.callbacks.onStateChange(room, this.myPeerId, true);
-        },
-        onChatMessage: (msg) => this.callbacks.onChatMessage(msg),
-        onActionError: (msg) => this.callbacks.onError(msg),
-        onTradeRejected: (name) => this.callbacks.onTradeRejected(name),
-      },
-    });
-
-    // Populate 3 bots by default for instant singleplayer setup
-    this.hostController.addBot();
-    this.hostController.addBot();
-    this.hostController.addBot();
-
-    this.callbacks.onConnectionModeChange('local', {});
-    this.callbacks.onStateChange(this.hostController.getRoom(), this.myPeerId, true);
-  }
-
-  // =====================================================================
   // Online Host-and-Peer Mode (Cloudflare SignalRoomDO + WebRTC)
   // =====================================================================
 
@@ -147,10 +106,12 @@ export class RoomSession {
     name: string;
     avatar: AvatarConfig;
     rules?: Partial<GameRules>;
+    password?: string;
   }): Promise<string> {
     this.dispose();
     this.disposed = false;
     this.isLocalOnly = false;
+    this.lastPublishedMetaKey = '';
     this.profile = { name: params.name, avatar: params.avatar };
 
     const resp = await fetch('/api/rooms', { method: 'POST' });
@@ -158,7 +119,14 @@ export class RoomSession {
       throw new Error('Could not allocate room code from Cloudflare Worker.');
     }
     const { code } = (await resp.json()) as { code: string };
-    await this.connectSignalSocket(code, 'create', params.rules);
+    await this.connectSignalSocket({
+      code,
+      role: 'create',
+      password: params.password,
+      hostName: params.name,
+      ruleset: params.rules?.ruleset ?? 'Get Rich',
+      initialRules: params.rules,
+    });
     return code;
   }
 
@@ -166,21 +134,27 @@ export class RoomSession {
     code: string;
     name: string;
     avatar: AvatarConfig;
+    password?: string;
   }): Promise<void> {
     this.dispose();
     this.disposed = false;
     this.isLocalOnly = false;
+    this.lastPublishedMetaKey = '';
     this.profile = { name: params.name, avatar: params.avatar };
 
     const cleanCode = params.code.trim().toUpperCase();
     if (!/^[A-Z0-9]{4}$/.test(cleanCode)) {
-      throw new Error('Room code must be 4 letters/numbers.');
+      throw new Error('Invalid room code.');
     }
-    await this.connectSignalSocket(cleanCode, 'join');
+    await this.connectSignalSocket({
+      code: cleanCode,
+      role: 'join',
+      password: params.password,
+    });
   }
 
   // =====================================================================
-  // Unified Actions (Work Identically as Host, Peer, or Solo)
+  // Unified Actions
   // =====================================================================
 
   public dispatchGameAction(action: MonopolyActionType, payload?: unknown): void {
@@ -275,14 +249,25 @@ export class RoomSession {
   // Signaling & WebRTC Star Management
   // =====================================================================
 
-  private connectSignalSocket(
-    code: string,
-    role: 'create' | 'join',
-    initialRules?: Partial<GameRules>
-  ): Promise<void> {
+  private connectSignalSocket(opts: {
+    code: string;
+    role: 'create' | 'join';
+    password?: string;
+    hostName?: string;
+    ruleset?: 'Classic' | 'Get Rich';
+    initialRules?: Partial<GameRules>;
+  }): Promise<void> {
     return new Promise((resolve, reject) => {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = `${protocol}//${window.location.host}/api/rooms/${code}/ws?role=${role}&sessionId=${encodeURIComponent(this.sessionId)}`;
+      const qs = new URLSearchParams({
+        role: opts.role,
+        sessionId: this.sessionId,
+      });
+      if (opts.password?.trim()) qs.set('password', opts.password.trim());
+      if (opts.hostName) qs.set('hostName', opts.hostName);
+      if (opts.ruleset) qs.set('ruleset', opts.ruleset);
+
+      const url = `${protocol}//${window.location.host}/api/rooms/${opts.code}/ws?${qs.toString()}`;
       const ws = new WebSocket(url);
       this.ws = ws;
       this.callbacks.onConnectionModeChange('connecting', {});
@@ -339,7 +324,7 @@ export class RoomSession {
             settled = true;
             resolve();
           }
-          this.handleWelcome(msg, initialRules);
+          this.handleWelcome(msg, opts.initialRules);
           return;
         }
 
@@ -388,9 +373,10 @@ export class RoomSession {
       }
 
       this.initHostController(initialRoom, initialVersion, []);
-      this.callbacks.onStateChange(this.hostController!.getRoom(), this.myPeerId, true);
+      const currentRoom = this.hostController!.getRoom();
+      this.publishLobbyDirectoryMeta(currentRoom);
+      this.callbacks.onStateChange(currentRoom, this.myPeerId, true);
 
-      // Connect to any already-present peers
       for (const peer of msg.peers) {
         if (peer.peerId !== this.myPeerId) {
           void this.openHostLinkToPeer(peer.peerId);
@@ -400,7 +386,6 @@ export class RoomSession {
     } else {
       this.initPeerClient();
       this.ensurePeerLinkToHost(this.hostPeerId);
-      // Send initial hello over whichever transport is ready (relay immediately, P2P once open)
       this.peerClient!.sendHello(
         this.sessionId,
         this.profile?.name || 'Player',
@@ -408,6 +393,26 @@ export class RoomSession {
       );
       this.emitConnectionSummary();
     }
+  }
+
+  private publishLobbyDirectoryMeta(room: RoomState): void {
+    if (!this.isHost || this.isLocalOnly) return;
+    const hostPlayer = room.players.find((p) => p.isHost) ?? room.players[0];
+    const hostName = hostPlayer?.name || this.profile?.name || 'Host';
+    const status: 'lobby' | 'playing' = room.gameState === 'lobby' ? 'lobby' : 'playing';
+    const playerCount = room.players.length;
+    const ruleset = room.rules.ruleset;
+    const key = `${hostName}|${ruleset}|${playerCount}|${status}`;
+    if (key === this.lastPublishedMetaKey) return;
+    this.lastPublishedMetaKey = key;
+
+    this.sendSignal({
+      type: 'room-meta-update',
+      hostName,
+      ruleset,
+      playerCount,
+      status,
+    });
   }
 
   private handleSignalMessage(msg: ServerSignalMessage): void {
@@ -480,20 +485,18 @@ export class RoomSession {
   }
 
   private handleHostPromoted(newHostPeerId: string, peers: PeerDescriptor[]): void {
-    // Close old WebRTC links
     for (const link of this.links.values()) {
       link.close();
     }
     this.links.clear();
     this.peerModes = {};
-
     this.hostPeerId = newHostPeerId;
 
     if (newHostPeerId === this.myPeerId) {
-      // Promote THIS peer to authoritative Host!
       const snap = this.peerClient?.getMigrationSnapshot();
       this.peerClient = null;
       this.isHost = true;
+      this.lastPublishedMetaKey = '';
 
       if (snap && snap.room) {
         const migratedRoom = cloneState(snap.room);
@@ -511,14 +514,11 @@ export class RoomSession {
         }
 
         this.initHostController(migratedRoom, snap.stateVersion, snap.chatHistory);
+        const latest = this.hostController!.getRoom();
+        this.publishLobbyDirectoryMeta(latest);
         this.callbacks.onHostMigrated?.(newHostName);
-        this.callbacks.onStateChange(
-          this.hostController!.getRoom(),
-          this.myPeerId,
-          true
-        );
+        this.callbacks.onStateChange(latest, this.myPeerId, true);
 
-        // Open fresh WebRTC links to all remaining peers and broadcast migrated snapshot
         for (const peer of peers) {
           if (peer.peerId !== this.myPeerId) {
             void this.openHostLinkToPeer(peer.peerId);
@@ -527,7 +527,6 @@ export class RoomSession {
         }
       }
     } else {
-      // Follow the newly promoted Host
       this.isHost = false;
       this.ensurePeerLinkToHost(newHostPeerId);
       this.peerClient?.requestSync();
@@ -584,6 +583,7 @@ export class RoomSession {
       },
       callbacks: {
         onStateChange: (room) => {
+          this.publishLobbyDirectoryMeta(room);
           this.callbacks.onStateChange(room, this.myPeerId, true);
         },
         onChatMessage: (msg) => this.callbacks.onChatMessage(msg),
@@ -673,10 +673,6 @@ export class RoomSession {
   }
 
   private emitConnectionSummary(): void {
-    if (this.isLocalOnly) {
-      this.callbacks.onConnectionModeChange('local', {});
-      return;
-    }
     const modes = Object.values(this.peerModes);
     let summary: PeerLinkMode = 'p2p-webrtc';
     if (modes.length === 0) {

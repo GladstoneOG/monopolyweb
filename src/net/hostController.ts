@@ -49,6 +49,7 @@ export interface HostControllerOptions {
 }
 
 const SNAPSHOT_STORAGE_PREFIX = 'monopoly_web_host_snap_';
+const MAX_ANIMATION_HOLD_MS = 3400;
 
 function formatTime(): string {
   return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -56,6 +57,59 @@ function formatTime(): string {
 
 function makeChatId(): string {
   return `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Computes a deterministic, strictly bounded animation hold duration (ms)
+ * so bots and the next player wait for token hops, jail slams, card fly-ins,
+ * and bill transfers to finish — without ever waiting on client ACKs (zero deadlock risk).
+ */
+export function computeAnimationHoldMs(prev: RoomState, next: RoomState): number {
+  if (prev.gameState !== 'playing' || next.gameState !== 'playing') return 0;
+  // Rolling / casino flip have their own dedicated scheduledEffect timers
+  if (next.phase === 'rolling_animation' || next.phase === 'casino_result_hold') return 0;
+
+  let holdMs = 0;
+
+  // 1. Check player movement / jail slam / airport flight
+  for (const nextP of next.players) {
+    const prevP = prev.players.find((p) => p.id === nextP.id);
+    if (!prevP) continue;
+
+    if (!prevP.inJail && nextP.inJail) {
+      holdMs = Math.max(holdMs, 1750);
+    } else if (prevP.position !== nextP.position) {
+      if (
+        next.lastActionDetail?.type === 'airport' &&
+        next.lastActionDetail.tileIndex === nextP.position
+      ) {
+        holdMs = Math.max(holdMs, 900);
+      } else {
+        const backward3 = (prevP.position - nextP.position + 40) % 40 === 3;
+        const steps = backward3 ? 3 : (nextP.position - prevP.position + 40) % 40;
+        const hopMs = steps * 220 + 450;
+        holdMs = Math.max(holdMs, hopMs);
+      }
+    }
+  }
+
+  // 2. Chance / Community Chest card fly-in
+  if (next.phase === 'card_drawn' && prev.phase !== 'card_drawn') {
+    holdMs = Math.max(holdMs + 650, 1100);
+  }
+
+  // 3. Cash transfer / property purchase / turn handoff visual beat
+  if (holdMs === 0) {
+    const moneyChanged = next.players.some((np) => {
+      const pp = prev.players.find((p) => p.id === np.id);
+      return pp && pp.money !== np.money;
+    });
+    if (moneyChanged || next.turnIndex !== prev.turnIndex) {
+      holdMs = 650;
+    }
+  }
+
+  return Math.min(holdMs, MAX_ANIMATION_HOLD_MS);
 }
 
 /**
@@ -101,6 +155,13 @@ export function replacePlayerIdInRoom(room: RoomState, oldId: string, newId: str
   }
 }
 
+const TURN_START_ACTIONS: ReadonlySet<MonopolyActionType> = new Set([
+  'roll-dice',
+  'roll-jail-doubles',
+  'pay-jail-fine',
+  'use-jail-card',
+]);
+
 export class HostController {
   private room: RoomState;
   private hostPeerId: string;
@@ -114,6 +175,7 @@ export class HostController {
 
   private effectTimer: ReturnType<typeof setTimeout> | null = null;
   private botTimer: ReturnType<typeof setTimeout> | null = null;
+  private actionHoldUntil = 0;
   private disposed = false;
 
   constructor(options: HostControllerOptions) {
@@ -141,6 +203,10 @@ export class HostController {
 
   public getChatHistory(): ChatMessage[] {
     return this.chatHistory;
+  }
+
+  public getRemainingAnimationHoldMs(): number {
+    return Math.max(0, this.actionHoldUntil - Date.now());
   }
 
   public dispose(): void {
@@ -297,9 +363,17 @@ export class HostController {
     }
 
     this.clearTimers();
+    this.actionHoldUntil = 0;
     const res = startGame(this.room, this.rng);
     if (!res.changed) return;
-    this.commitState(res.state);
+
+    // Give the intro curtain countdown a bounded 2.6s hold so bots don't roll behind closed curtains
+    const introHold = Math.round(2600 * this.effectDelayScale);
+    if (introHold > 0) {
+      this.actionHoldUntil = Date.now() + introHold;
+    }
+
+    this.commitState(res.state, false);
     this.processEngineEvents(res.events);
     this.scheduleBotTurnIfNeeded();
   }
@@ -310,12 +384,13 @@ export class HostController {
 
   public returnToLobby(): void {
     this.clearTimers();
+    this.actionHoldUntil = 0;
     const next = cloneState(this.room);
     next.gameState = 'lobby';
     for (const p of next.players) {
       p.isReady = p.isHost || p.isBot;
     }
-    this.commitState(next);
+    this.commitState(next, false);
   }
 
   // =====================================================================
@@ -328,7 +403,6 @@ export class HostController {
   ): void {
     const next = cloneState(this.room);
 
-    // 1. Check if reconnecting by sessionId
     const existingBySession = next.players.find(
       (p) => !p.isBot && p.sessionId === msg.sessionId
     );
@@ -339,24 +413,22 @@ export class HostController {
       existingBySession.avatar = msg.avatar || existingBySession.avatar;
       existingBySession.disconnected = false;
       replacePlayerIdInRoom(next, oldId, peerId);
-      this.commitState(next);
+      this.commitState(next, false);
       this.syncPeer(peerId);
       this.emitSystemChat(`${existingBySession.name} rejoined the room.`);
       return;
     }
 
-    // 2. Check if already present by peerId
     const existingById = next.players.find((p) => p.id === peerId);
     if (existingById) {
       existingById.name = msg.name || existingById.name;
       existingById.avatar = msg.avatar || existingById.avatar;
       existingById.disconnected = false;
-      this.commitState(next);
+      this.commitState(next, false);
       this.syncPeer(peerId);
       return;
     }
 
-    // 3. New joiner (only in lobby)
     if (next.gameState !== 'lobby') {
       this.transport.sendToPeer(peerId, {
         type: 'kicked',
@@ -365,8 +437,6 @@ export class HostController {
       return;
     }
     if (next.players.length >= 4) {
-      // If there's a bot in lobby, kick one bot to make room for human player?
-      // Better: check if room is full (4 humans or bots) and notify.
       this.transport.sendToPeer(peerId, {
         type: 'kicked',
         reason: 'Room is full (max 4 players).',
@@ -385,7 +455,7 @@ export class HostController {
         startingCash: next.rules.startingCash,
       })
     );
-    this.commitState(next);
+    this.commitState(next, false);
     this.syncPeer(peerId);
     this.emitSystemChat(`${msg.name || 'A player'} joined the lobby.`);
   }
@@ -396,7 +466,7 @@ export class HostController {
     const player = next.players.find((p) => p.id === peerId);
     if (!player || player.isHost || player.isBot) return;
     player.isReady = !player.isReady;
-    this.commitState(next);
+    this.commitState(next, false);
   }
 
   private handleGameAction(
@@ -404,13 +474,19 @@ export class HostController {
     action: MonopolyActionType,
     payload?: unknown
   ): void {
+    // Prevent starting a new turn while the previous player's animation hold is still active.
+    // Strictly time-bounded (<= 3.4s), so it can NEVER lock or halt the game.
+    if (TURN_START_ACTIONS.has(action) && Date.now() < this.actionHoldUntil) {
+      return;
+    }
+
     const res = applyMonopolyAction(this.room, senderId, action, payload, this.rng);
     if (res.events.length > 0) {
       this.processEngineEvents(res.events);
     }
     if (!res.changed) return;
 
-    this.commitState(res.state);
+    this.commitState(res.state, true);
     if (res.scheduledEffect) {
       this.scheduleEffect(res.scheduledEffect);
     } else {
@@ -517,7 +593,7 @@ export class HostController {
       }
       if (!res.changed) return;
 
-      this.commitState(res.state);
+      this.commitState(res.state, true);
       if (res.scheduledEffect) {
         this.scheduleEffect(res.scheduledEffect);
       } else {
@@ -567,7 +643,10 @@ export class HostController {
     const decision = getNextBotAction(this.room);
     if (!decision) return;
 
-    const delay = Math.max(0, Math.round(this.botDelayMs * this.effectDelayScale));
+    const remainingHold = Math.max(0, this.actionHoldUntil - Date.now());
+    const baseDelay = Math.max(0, Math.round(this.botDelayMs * this.effectDelayScale));
+    const delay = Math.max(baseDelay, remainingHold);
+
     this.botTimer = setTimeout(() => {
       this.botTimer = null;
       if (this.disposed) return;
@@ -575,7 +654,6 @@ export class HostController {
       const latestDecision = getNextBotAction(this.room);
       if (!latestDecision) return;
 
-      // Host acts on behalf of bots
       this.handleGameAction(
         this.hostPeerId,
         latestDecision.action,
@@ -584,7 +662,16 @@ export class HostController {
     }, delay);
   }
 
-  private commitState(nextRoom: RoomState): void {
+  private commitState(nextRoom: RoomState, trackAnimationHold = true): void {
+    if (trackAnimationHold) {
+      const holdMs = Math.round(
+        computeAnimationHoldMs(this.room, nextRoom) * this.effectDelayScale
+      );
+      if (holdMs > 0) {
+        this.actionHoldUntil = Math.max(this.actionHoldUntil, Date.now() + holdMs);
+      }
+    }
+
     this.room = nextRoom;
     this.stateVersion += 1;
     this.persistSnapshot();
@@ -608,7 +695,7 @@ export class HostController {
         );
       }
     } catch {
-      // ignore storage quota errors
+      // ignore
     }
   }
 

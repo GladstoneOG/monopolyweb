@@ -21,6 +21,17 @@ export interface PeerDescriptor {
   isHost: boolean;
 }
 
+export interface LobbySummary {
+  code: string;
+  hostName: string;
+  ruleset: 'Classic' | 'Get Rich';
+  playerCount: number;
+  maxPlayers: number;
+  hasPassword: boolean;
+  status: 'lobby' | 'playing';
+  updatedAt: number;
+}
+
 export type ClientSignalMessage =
   | { type: 'signal-offer'; targetPeerId: string; sdp: SdpPayload }
   | { type: 'signal-answer'; targetPeerId: string; sdp: SdpPayload }
@@ -28,6 +39,13 @@ export type ClientSignalMessage =
   | { type: 'relay-to-host'; payload: unknown }
   | { type: 'relay-to-peer'; targetPeerId: string; payload: unknown }
   | { type: 'relay-broadcast'; payload: unknown }
+  | {
+      type: 'room-meta-update';
+      hostName: string;
+      ruleset: 'Classic' | 'Get Rich';
+      playerCount: number;
+      status: 'lobby' | 'playing';
+    }
   | { type: 'heartbeat-ping'; ts: number };
 
 export type ServerSignalMessage =
