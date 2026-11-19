@@ -83,19 +83,19 @@ export function computeAnimationHoldMs(prev: RoomState, next: RoomState): number
         next.lastActionDetail?.type === 'airport' &&
         next.lastActionDetail.tileIndex === nextP.position
       ) {
-        holdMs = Math.max(holdMs, 900);
+        holdMs = Math.max(holdMs, 1150);
       } else {
         const backward3 = (prevP.position - nextP.position + 40) % 40 === 3;
         const steps = backward3 ? 3 : (nextP.position - prevP.position + 40) % 40;
-        const hopMs = steps * 220 + 450;
+        const hopMs = steps * 220 + 780;
         holdMs = Math.max(holdMs, hopMs);
       }
     }
   }
 
-  // 2. Chance / Community Chest card fly-in
+  // 2. Chance / Community Chest card fly-in (triggers after landing settle)
   if (next.phase === 'card_drawn' && prev.phase !== 'card_drawn') {
-    holdMs = Math.max(holdMs + 650, 1100);
+    holdMs = Math.max(holdMs + 750, 1300);
   }
 
   // 3. Cash transfer / property purchase / turn handoff visual beat

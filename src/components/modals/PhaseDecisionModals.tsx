@@ -348,7 +348,7 @@ export const PhaseDecisionModals: React.FC<PhaseDecisionModalsProps> = React.mem
           })()}
 
         {/* 9. Get Rich: Landed Instant Build */}
-        {phase === 'landed_build' && isMyTurn && activePlayer && landedTile?.type === 'property' && (
+        {!isAnimating && phase === 'landed_build' && isMyTurn && activePlayer && landedTile?.type === 'property' && (
           <div className="drawn-card-popup sky">
             <div className="card-header-icon">🏗️</div>
             <div className="card-title-text">Build Instantly!</div>

@@ -11,6 +11,8 @@ interface CasinoCoinModalProps {
   onAction: (action: MonopolyActionType) => void;
 }
 
+const EDGE_SLICES = [-4, -3, -2, -1, 0, 1, 2, 3, 4] as const;
+
 export const CasinoCoinModal: React.FC<CasinoCoinModalProps> = React.memo(
   ({ casinoState, players, myPlayerId, isAnimatingBoard, onAction }) => {
     const prevStatusRef = useRef<string | null>(null);
@@ -20,11 +22,12 @@ export const CasinoCoinModal: React.FC<CasinoCoinModalProps> = React.memo(
         prevStatusRef.current = null;
         return;
       }
-      if (casinoState.status !== prevStatusRef.current) {
+      const statusKey = `${casinoState.round}_${casinoState.status}`;
+      if (statusKey !== prevStatusRef.current) {
         if (casinoState.status === 'flipping') sfx.playCoinFlip();
         else if (casinoState.status === 'won' || casinoState.status === 'jackpot') sfx.playJackpot();
         else if (casinoState.status === 'lost') sfx.playBankruptcy();
-        prevStatusRef.current = casinoState.status;
+        prevStatusRef.current = statusKey;
       }
     }, [casinoState]);
 
@@ -38,12 +41,16 @@ export const CasinoCoinModal: React.FC<CasinoCoinModalProps> = React.memo(
     const isJackpot = casinoState.status === 'jackpot';
     const isLost = casinoState.status === 'lost';
 
-    const coinFinalRotation = casinoState.result === 'lose' ? '1980deg' : '1800deg';
+    // End-over-end realistic rotateX revolutions:
+    // 2160deg (6 full flips) lands cleanly on WIN (front face),
+    // 2340deg (6.5 flips) lands cleanly on LOSE (back face)!
+    const coinFinalRotX = casinoState.result === 'lose' ? '2340deg' : '2160deg';
+    const animKey = `${casinoState.round}_${isFlipping ? 'flip' : casinoState.status}`;
 
     return (
       <div className="casino-modal-overlay">
         {(isWon || isJackpot) && <div className="confetti-shimmer" />}
-        <div className="casino-card">
+        <div className={`casino-card ${isLost ? 'casino-lost-shake' : ''}`}>
           <div className="casino-title">🎰 GET RICH CASINO 🎰</div>
           <div className="casino-subtitle">
             <strong>{flippingPlayer?.name ?? 'Player'}</strong> is testing their fortune!
@@ -53,22 +60,48 @@ export const CasinoCoinModal: React.FC<CasinoCoinModalProps> = React.memo(
             Round {casinoState.round} of 3 — Stake: <strong>${casinoState.payout}</strong>
           </div>
 
-          <div className="coin-container">
+          {/* 3D Velvet Toss Stage with Parabolic Arc + Thick Metallic Rim + Dynamic Shadow */}
+          <div className="coin-stage">
             <div
-              className={`coin-3d ${isFlipping ? 'flipping' : ''} ${
-                isWon || isJackpot ? 'won-state' : ''
-              } ${isLost ? 'lost-state' : ''}`}
-              style={{ ['--coin-final-rotation' as string]: coinFinalRotation }}
+              key={animKey}
+              className={`coin-arc-wrapper ${isFlipping ? 'tossing' : ''}`}
             >
-              <div className="coin-side coin-front">
-                <span className="coin-crown">👑</span>
-                <span className="coin-label win">WIN</span>
-              </div>
-              <div className="coin-side coin-back">
-                <span className="coin-crown">💀</span>
-                <span className="coin-label lose">LOSE</span>
+              <div
+                className={`coin-3d ${isFlipping ? 'flipping' : ''} ${
+                  isWon || isJackpot ? 'won-state' : ''
+                } ${isLost ? 'lost-state' : ''} ${isPending ? 'idle-float' : ''}`}
+                style={{ ['--coin-final-rotx' as string]: coinFinalRotX }}
+              >
+                {/* Stacked metallic gold rim slices give real 3D coin thickness */}
+                {EDGE_SLICES.map((z) => (
+                  <div
+                    key={z}
+                    className="coin-edge-slice"
+                    style={{ transform: `translateZ(${z}px)` }}
+                  />
+                ))}
+
+                <div className="coin-side coin-front">
+                  <div className="coin-inner-ring">
+                    <span className="coin-crown">👑</span>
+                    <span className="coin-label win">WIN</span>
+                  </div>
+                  <div className="coin-specular-glint" />
+                </div>
+
+                <div className="coin-side coin-back">
+                  <div className="coin-inner-ring back">
+                    <span className="coin-crown">💀</span>
+                    <span className="coin-label lose">LOSE</span>
+                  </div>
+                  <div className="coin-specular-glint" />
+                </div>
               </div>
             </div>
+
+            <div className={`coin-floor-shadow ${isFlipping ? 'tossing' : ''}`} />
+            {(isWon || isJackpot) && <div className="coin-impact-burst win" />}
+            {isLost && <div className="coin-impact-burst lose" />}
           </div>
 
           <div className="casino-actions-box">
@@ -87,7 +120,7 @@ export const CasinoCoinModal: React.FC<CasinoCoinModalProps> = React.memo(
                 </div>
               ))}
 
-            {isFlipping && <div className="casino-flipping-text">🪙 Coin in the air...</div>}
+            {isFlipping && <div className="casino-flipping-text">🪙 Coin spinning in mid-air...</div>}
 
             {isWon && (
               <>

@@ -91,8 +91,10 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
   const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [visualPositions, setVisualPositions] = useState<Record<string, number>>({});
   const [movingSteps, setMovingSteps] = useState<Record<string, number>>({});
+  const [isSettlingLanding, setIsSettlingLanding] = useState(false);
   const [jailAnimActive, setJailAnimActive] = useState(false);
   const [flyingCard, setFlyingCard] = useState<FlyingCardAnim | null>(null);
+  const [cardAnimDoneKey, setCardAnimDoneKey] = useState<string | null>(null);
   const [flyingBills, setFlyingBills] = useState<FlyingBillParticle[]>([]);
   const [floatingTexts, setFloatingTexts] = useState<FloatingTileText[]>([]);
   const [cameraShake, setCameraShake] = useState(false);
@@ -102,6 +104,8 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
     curtainOpen: boolean;
     text: '3' | '2' | '1' | 'Roll!' | null;
   }>({ active: false, curtainOpen: true, text: null });
+
+  const settleLandingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Zero-re-render camera refs
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -267,6 +271,14 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
         if (!camRef.current.manual && !dragRef.current.active) {
           applyCameraVars(-coords.x * 1.15, -coords.y * 1.15, baseScaleRef.current * 1.2, '0.45s');
         }
+        // Hold briefly so the final 200ms slide + camera zoom settle visibly BEFORE popups appear
+        setIsSettlingLanding(true);
+        if (settleLandingTimerRef.current) clearTimeout(settleLandingTimerRef.current);
+        settleLandingTimerRef.current = setTimeout(() => {
+          setIsSettlingLanding(false);
+          settleLandingTimerRef.current = null;
+        }, 360);
+
         setMovingSteps((prev) => {
           const next = { ...prev };
           delete next[pId];
@@ -323,6 +335,12 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
           sfx.playAirportWhoosh();
           setVisualPositions((prev) => ({ ...prev, [p.id]: p.position }));
           pushFloatingText(p.position, '✈️ Arrived!', 'airport');
+          setIsSettlingLanding(true);
+          if (settleLandingTimerRef.current) clearTimeout(settleLandingTimerRef.current);
+          settleLandingTimerRef.current = setTimeout(() => {
+            setIsSettlingLanding(false);
+            settleLandingTimerRef.current = null;
+          }, 480);
           continue;
         }
 
@@ -342,22 +360,33 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
     pushFloatingText,
   ]);
 
-  // Clean up hop timers on unmount
+  // Clean up hop & settle timers on unmount
   useEffect(() => {
     return () => {
       Object.values(hopTimersRef.current).forEach(clearTimeout);
+      if (settleLandingTimerRef.current) clearTimeout(settleLandingTimerRef.current);
     };
   }, []);
 
   const isAnyoneMoving = players.some(
     (p) => visualPositions[p.id] !== undefined && visualPositions[p.id] !== p.position
   );
+  const isTokenMoving =
+    isAnyoneMoving || Object.keys(movingSteps).length > 0 || isSettlingLanding;
+
+  const currentCardKey =
+    phase === 'card_drawn' && room.currentCard
+      ? `${room.roundNumber}_${room.turnCount}_${room.rollId ?? 'x'}_${room.currentCard.id}`
+      : null;
+  const isCardFlightPending = Boolean(currentCardKey && cardAnimDoneKey !== currentCardKey);
+
   const isAnimating =
     isDiceRolling ||
-    isAnyoneMoving ||
+    isTokenMoving ||
     jailAnimActive ||
     introState.active ||
-    Boolean(flyingCard);
+    Boolean(flyingCard) ||
+    isCardFlightPending;
 
   // Deadlock-proof watchdog: if a backgrounded tab drops a hop timer, snap visualPositions cleanly
   useEffect(() => {
@@ -406,18 +435,22 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
     applyCameraVars,
   ]);
 
-  // Card flying animation from deck when Chance/Chest is drawn
+  // Card flying animation from deck — strictly waits until token has landed & settled!
+  const activePlayerPosition = activePlayer ? activePlayer.position : 0;
   useEffect(() => {
-    if (phase !== 'card_drawn' || !room.currentCard || !room.cardType) {
+    if (!currentCardKey || !room.cardType) {
       setFlyingCard(null);
       return;
     }
-    const isChance = room.cardType === 'chance';
+    if (cardAnimDoneKey === currentCardKey) return;
+    if (isDiceRolling || isTokenMoving || jailAnimActive || introState.active) return;
+
+    const cardTypeNow = room.cardType;
+    const isChance = cardTypeNow === 'chance';
     const startX = isChance ? 110 : -110;
     const startY = isChance ? -120 : 120;
     const startRot = isChance ? -45 : 135;
-    const pos = activePlayer ? visualPositions[activePlayer.id] ?? activePlayer.position : 0;
-    const end = getTileLocalCoords(pos);
+    const end = getTileLocalCoords(activePlayerPosition);
 
     setFlyingCard({
       x: startX,
@@ -425,7 +458,7 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
       z: 6,
       rot: startRot,
       scale: 0.8,
-      type: room.cardType,
+      type: cardTypeNow,
     });
     sfx.playDraw();
 
@@ -436,16 +469,29 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
         z: 52,
         rot: startRot + 360,
         scale: 1.18,
-        type: room.cardType!,
+        type: cardTypeNow,
       });
     }, 45);
 
-    const t2 = setTimeout(() => setFlyingCard(null), 950);
+    const t2 = setTimeout(() => {
+      setFlyingCard(null);
+      setCardAnimDoneKey(currentCardKey);
+    }, 920);
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
     };
-  }, [phase, room.currentCard, room.cardType, activePlayer, visualPositions]);
+  }, [
+    currentCardKey,
+    cardAnimDoneKey,
+    room.cardType,
+    isDiceRolling,
+    isTokenMoving,
+    jailAnimActive,
+    introState.active,
+    activePlayerPosition,
+  ]);
 
   // Capped flying bills & floating action text diff watcher
   const spawnFlyingBills = useCallback(
@@ -1117,7 +1163,7 @@ export const MonopolyTable: React.FC<MonopolyTableProps> = ({
       />
 
       {/* Auction Modal */}
-      {phase === 'auction' && (
+      {!isAnimating && phase === 'auction' && (
         <AuctionModal
           auctionState={room.auctionState}
           board={board}

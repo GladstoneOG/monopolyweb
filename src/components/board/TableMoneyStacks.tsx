@@ -13,11 +13,17 @@ export const TableMoneyStacks: React.FC<TableMoneyStacksProps> = React.memo(({ p
       {players.map((p, idx) => {
         if (p.bankrupt) return null;
 
+        // Place each player's cash stack cleanly outside the 4 sides of the 638x620 board
         let stackStyle: React.CSSProperties = {};
-        if (idx === 0) stackStyle = { top: '-110px', left: '50%', transform: 'translateX(-50%)' };
-        else if (idx === 1) stackStyle = { top: '50%', right: '-195px', transform: 'translateY(-50%) rotateZ(90deg)' };
-        else if (idx === 2) stackStyle = { bottom: '-110px', left: '50%', transform: 'translateX(-50%)' };
-        else if (idx === 3) stackStyle = { top: '50%', left: '-195px', transform: 'translateY(-50%) rotateZ(-90deg)' };
+        if (idx === 0) {
+          stackStyle = { top: '-118px', left: '50%', transform: 'translateX(-50%)' };
+        } else if (idx === 1) {
+          stackStyle = { top: '50%', right: '-212px', transform: 'translateY(-50%) rotateZ(90deg)' };
+        } else if (idx === 2) {
+          stackStyle = { bottom: '-118px', left: '50%', transform: 'translateX(-50%)' };
+        } else if (idx === 3) {
+          stackStyle = { top: '50%', left: '-212px', transform: 'translateY(-50%) rotateZ(-90deg)' };
+        }
 
         let temp = Math.max(0, p.money);
         const stacks: Array<{ val: number; count: number }> = [];
@@ -31,7 +37,9 @@ export const TableMoneyStacks: React.FC<TableMoneyStacksProps> = React.memo(({ p
         }
 
         const color = getPlayerColor(players, p.id);
+        // Exact inverse of parent board (rotateX 42, rotateZ 45) + container rotateZ (0 / 90 / 0 / -90)
         const labelRotZ = idx === 1 ? -135 : idx === 3 ? 45 : -45;
+        const displayName = p.name.length > 14 ? `${p.name.slice(0, 13)}…` : p.name;
 
         return (
           <div
@@ -85,15 +93,18 @@ export const TableMoneyStacks: React.FC<TableMoneyStacksProps> = React.memo(({ p
               )}
             </div>
 
+            {/* Upright screen-parallel billboard plaque (never squished or foreshortened) */}
             <div
-              className="table-stack-label"
+              className="table-stack-label-anchor"
               style={{
-                transform: `translate3d(0, 0, 38px) rotateZ(${labelRotZ}deg) rotateX(-42deg)`,
+                transform: `translate3d(-50%, 0, 44px) rotateZ(${labelRotZ}deg) rotateX(-42deg)`,
               }}
             >
-              <span className="table-player-name">
-                {p.name.slice(0, 8)}: ${p.money.toLocaleString()}
-              </span>
+              <div className="table-stack-label" style={{ borderColor: color }}>
+                <span className="table-player-dot" style={{ background: color }} />
+                <span className="table-player-name">{displayName}</span>
+                <span className="table-player-cash">${p.money.toLocaleString()}</span>
+              </div>
             </div>
           </div>
         );
